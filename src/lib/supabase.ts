@@ -15,7 +15,7 @@ export interface User {
   username: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'student';
+  role: 'super_admin' | 'admin' | 'student';
   password_hash: string;
   last_login?: string;
   created_at: string;
@@ -90,3 +90,146 @@ export interface ExamSubmissionWithDetails extends ExamSubmission {
 export interface ExamAnswerWithQuestion extends ExamAnswer {
   question?: ExamQuestion;
 }
+
+// Super Admin specific types
+export interface AdminActivityLog {
+  id: string;
+  admin_id: string;
+  action_type: string;
+  target_type: string;
+  target_id?: string;
+  details: any;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+  admin?: User;
+}
+
+export interface SystemSetting {
+  id: string;
+  setting_key: string;
+  setting_value: any;
+  description?: string;
+  category: string;
+  is_public: boolean;
+  created_by?: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSession {
+  id: string;
+  user_id: string;
+  session_token: string;
+  ip_address?: string;
+  user_agent?: string;
+  is_active: boolean;
+  last_activity: string;
+  expires_at: string;
+  created_at: string;
+  user?: User;
+}
+
+export interface AdminPermission {
+  id: string;
+  admin_id: string;
+  permission_type: string;
+  resource_type: string;
+  can_create: boolean;
+  can_read: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  granted_by?: string;
+  created_at: string;
+  admin?: User;
+  granted_by_user?: User;
+}
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  message: string;
+  notification_type: 'info' | 'warning' | 'error' | 'success';
+  target_role?: 'super_admin' | 'admin' | 'student';
+  target_user_id?: string;
+  is_read: boolean;
+  is_system_wide: boolean;
+  created_by?: string;
+  created_at: string;
+  expires_at?: string;
+  created_by_user?: User;
+}
+
+// Super Admin utility functions
+export const logAdminActivity = async (
+  adminId: string,
+  actionType: string,
+  targetType: string,
+  targetId?: string,
+  details?: any,
+  ipAddress?: string,
+  userAgent?: string
+) => {
+  const { data, error } = await supabase.rpc('log_admin_activity', {
+    p_admin_id: adminId,
+    p_action_type: actionType,
+    p_target_type: targetType,
+    p_target_id: targetId,
+    p_details: details || {},
+    p_ip_address: ipAddress,
+    p_user_agent: userAgent
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+export const createSystemNotification = async (
+  title: string,
+  message: string,
+  notificationType: 'info' | 'warning' | 'error' | 'success' = 'info',
+  targetRole?: 'super_admin' | 'admin' | 'student',
+  targetUserId?: string,
+  isSystemWide: boolean = false,
+  createdBy?: string,
+  expiresAt?: string
+) => {
+  const { data, error } = await supabase.rpc('create_system_notification', {
+    p_title: title,
+    p_message: message,
+    p_notification_type: notificationType,
+    p_target_role: targetRole,
+    p_target_user_id: targetUserId,
+    p_is_system_wide: isSystemWide,
+    p_created_by: createdBy,
+    p_expires_at: expiresAt
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+export const getSystemSetting = async (settingKey: string) => {
+  const { data, error } = await supabase.rpc('get_system_setting', {
+    p_setting_key: settingKey
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateSystemSetting = async (
+  settingKey: string,
+  settingValue: any,
+  updatedBy: string
+) => {
+  const { data, error } = await supabase.rpc('update_system_setting', {
+    p_setting_key: settingKey,
+    p_setting_value: settingValue,
+    p_updated_by: updatedBy
+  });
+
+  if (error) throw error;
+  return data;
+};

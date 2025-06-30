@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginForm } from './components/LoginForm';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { SuperAdminDashboard } from './components/super-admin/SuperAdminDashboard';
 import { StudentDashboard } from './components/student/StudentDashboard';
 
 function AppContent() {
@@ -25,7 +26,9 @@ function AppContent() {
         <Route 
           path="/" 
           element={
-            user.role === 'admin' ? (
+            user.role === 'super_admin' ? (
+              <Navigate to="/super-admin" replace />
+            ) : user.role === 'admin' ? (
               <Navigate to="/admin" replace />
             ) : (
               <Navigate to="/student" replace />
@@ -33,12 +36,22 @@ function AppContent() {
           } 
         />
         <Route 
+          path="/super-admin" 
+          element={
+            user.role === 'super_admin' ? (
+              <SuperAdminDashboard />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          } 
+        />
+        <Route 
           path="/admin" 
           element={
-            user.role === 'admin' ? (
+            user.role === 'admin' || user.role === 'super_admin' ? (
               <AdminDashboard />
             ) : (
-              <Navigate to="/student" replace />
+              <Navigate to="/" replace />
             )
           } 
         />
@@ -48,7 +61,7 @@ function AppContent() {
             user.role === 'student' ? (
               <StudentDashboard />
             ) : (
-              <Navigate to="/admin" replace />
+              <Navigate to="/" replace />
             )
           } 
         />

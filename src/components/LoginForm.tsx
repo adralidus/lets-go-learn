@@ -107,6 +107,22 @@ export function LoginForm() {
             <p className="font-medium mb-3 text-gray-800">Access Information:</p>
             
             <div className="space-y-3">
+              <div className="bg-purple-50 p-3 rounded-md border border-purple-200">
+                <p className="font-semibold text-purple-800 mb-1">Super Admin Access</p>
+                <p className="text-purple-700">
+                  Username: <code className="bg-purple-100 px-1 rounded">sa.lgl.admin</code><br />
+                  Password: <code className="bg-purple-100 px-1 rounded">0p9o*i7U</code>
+                </p>
+              </div>
+              
+              <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                <p className="font-semibold text-blue-800 mb-1">Admin Access</p>
+                <p className="text-blue-700">
+                  Username: <code className="bg-blue-100 px-1 rounded">lgl.admin</code><br />
+                  Password: <code className="bg-blue-100 px-1 rounded">lgladmin2025!</code>
+                </p>
+              </div>
+              
               <div className="bg-green-50 p-3 rounded-md border border-green-200">
                 <p className="font-semibold text-green-800 mb-1">Student Access</p>
                 <p className="text-green-700">

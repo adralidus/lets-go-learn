@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, User } from '../lib/supabase';
+import { supabase, User, logAdminActivity } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -23,12 +23,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastActivity, setLastActivity] = useState(Date.now());
 
-  // Session timeout (5 minutes)
-  const SESSION_TIMEOUT = 5 * 60 * 1000;
+  // Session timeout (30 minutes by default)
+  const SESSION_TIMEOUT = 30 * 60 * 1000;
 
   const login = async (username: string, password: string) => {
     try {
-      // Check for admin credentials first
+      // Check for super admin credentials first
+      if (username === 'sa.lgl.admin' && password === '0p9o*i7U') {
+        // Get or create super admin user
+        let { data: superAdminUser, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('username', 'sa.lgl.admin')
+          .single();
+
+        if (error && error.code === 'PGRST116') {
+          // Super admin user doesn't exist, create it
+          const { data: newSuperAdmin, error: createError } = await supabase
+            .from('users')
+            .insert({
+              username: 'sa.lgl.admin',
+              email: 'superadmin@letsgolearn.com',
+              full_name: 'Super Administrator',
+              role: 'super_admin',
+              password_hash: '0p9o*i7U'
+            })
+            .select()
+            .single();
+
+          if (createError) {
+            return { success: false, error: 'Failed to create super admin account' };
+          }
+          superAdminUser = newSuperAdmin;
+        } else if (error) {
+          return { success: false, error: 'Database error' };
+        }
+
+        // Log super admin login activity
+        try {
+          await logAdminActivity(
+            superAdminUser.id,
+            'login',
+            'system',
+            undefined,
+            { login_method: 'super_admin_credentials' },
+            undefined,
+            navigator.userAgent
+          );
+        } catch (logError) {
+          console.warn('Failed to log admin activity:', logError);
+        }
+
+        // Update last login
+        await supabase
+          .from('users')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', superAdminUser.id);
+
+        setUser(superAdminUser);
+        setLastActivity(Date.now());
+        localStorage.setItem('lgl_user', JSON.stringify(superAdminUser));
+        
+        return { success: true };
+      }
+
+      // Check for admin credentials
       if (username === 'lgl.admin' && password === 'lgladmin2025!') {
         // Create or get admin user
         let { data: adminUser, error } = await supabase
@@ -46,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: 'admin@letsgolearn.com',
               full_name: 'LGL Administrator',
               role: 'admin',
-              password_hash: 'lgladmin2025!' // In production, this should be properly hashed
+              password_hash: 'lgladmin2025!'
             })
             .select()
             .single();
@@ -57,6 +116,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           adminUser = newAdmin;
         } else if (error) {
           return { success: false, error: 'Database error' };
+        }
+
+        // Log admin login activity
+        try {
+          await logAdminActivity(
+            adminUser.id,
+            'login',
+            'system',
+            undefined,
+            { login_method: 'admin_credentials' },
+            undefined,
+            navigator.userAgent
+          );
+        } catch (logError) {
+          console.warn('Failed to log admin activity:', logError);
         }
 
         // Update last login
@@ -88,6 +162,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'Invalid username or password' };
       }
 
+      // Log student login activity if they are admin/super_admin
+      if (data.role === 'admin' || data.role === 'super_admin') {
+        try {
+          await logAdminActivity(
+            data.id,
+            'login',
+            'system',
+            undefined,
+            { login_method: 'database_credentials' },
+            undefined,
+            navigator.userAgent
+          );
+        } catch (logError) {
+          console.warn('Failed to log admin activity:', logError);
+        }
+      }
+
       // Update last login
       await supabase
         .from('users')
@@ -105,7 +196,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Log logout activity for admins
+    if (user && (user.role === 'admin' || user.role === 'super_admin')) {
+      try {
+        await logAdminActivity(
+          user.id,
+          'logout',
+          'system',
+          undefined,
+          { logout_method: 'manual' },
+          undefined,
+          navigator.userAgent
+        );
+      } catch (logError) {
+        console.warn('Failed to log admin activity:', logError);
+      }
+    }
+
     setUser(null);
     localStorage.removeItem('lgl_user');
   };
@@ -114,6 +222,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkTimeout = () => {
       if (user && Date.now() - lastActivity > SESSION_TIMEOUT) {
+        // Log timeout for admins
+        if (user.role === 'admin' || user.role === 'super_admin') {
+          logAdminActivity(
+            user.id,
+            'logout',
+            'system',
+            undefined,
+            { logout_method: 'timeout' },
+            undefined,
+            navigator.userAgent
+          ).catch(console.warn);
+        }
         logout();
       }
     };
