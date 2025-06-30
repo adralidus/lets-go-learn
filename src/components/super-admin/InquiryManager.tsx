@@ -77,6 +77,8 @@ export function InquiryManager() {
       }
       
       console.log("Inquiries fetched:", data?.length || 0, "records");
+      console.log("Inquiry data sample:", data?.[0] || "No records");
+      
       setInquiries(data || []);
       setRefreshing(false);
     } catch (error) {
