@@ -8,6 +8,7 @@ import { UserSessions } from './UserSessions';
 import { SystemNotifications } from './SystemNotifications';
 import { AdminPermissions } from './AdminPermissions';
 import { SystemOverview } from './SystemOverview';
+import { InquiryManager } from './InquiryManager';
 import { 
   Shield, 
   Users, 
@@ -17,10 +18,11 @@ import {
   Monitor, 
   Bell, 
   Key,
-  BarChart3
+  BarChart3,
+  Mail
 } from 'lucide-react';
 
-type TabType = 'overview' | 'admins' | 'students' | 'settings' | 'activity' | 'sessions' | 'notifications' | 'permissions';
+type TabType = 'overview' | 'admins' | 'students' | 'settings' | 'activity' | 'sessions' | 'notifications' | 'permissions' | 'inquiries';
 
 export function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -30,6 +32,7 @@ export function SuperAdminDashboard() {
     { id: 'admins' as TabType, label: 'Instructor Management', icon: Shield },
     { id: 'students' as TabType, label: 'Student Management', icon: GraduationCap },
     { id: 'permissions' as TabType, label: 'Instructor Permissions', icon: Key },
+    { id: 'inquiries' as TabType, label: 'Inquiries', icon: Mail },
     { id: 'settings' as TabType, label: 'System Settings', icon: Settings },
     { id: 'activity' as TabType, label: 'Activity Logs', icon: Activity },
     { id: 'sessions' as TabType, label: 'User Sessions', icon: Monitor },
@@ -83,6 +86,7 @@ export function SuperAdminDashboard() {
           {activeTab === 'activity' && <ActivityLogs />}
           {activeTab === 'sessions' && <UserSessions />}
           {activeTab === 'notifications' && <SystemNotifications />}
+          {activeTab === 'inquiries' && <InquiryManager />}
         </div>
       </div>
     </Layout>
