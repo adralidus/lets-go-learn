@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, logAdminActivity } from '../../lib/supabase';
+import { supabase, Inquiry, logAdminActivity } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Mail, 
@@ -17,32 +17,22 @@ import {
   ArrowUp, 
   ArrowDown,
   MessageSquare,
-  Archive
+  Archive,
+  Star,
+  Inbox,
+  AlertCircle,
+  CheckSquare,
+  ArchiveIcon,
+  Tag,
+  MoreHorizontal,
+  Calendar
 } from 'lucide-react';
-import { format, subDays, parseISO } from 'date-fns';
+import { format, formatDistanceToNow, parseISO, subDays } from 'date-fns';
 
 type SortField = 'created_at' | 'email' | 'subject';
 type SortDirection = 'asc' | 'desc';
 type DateFilter = 'all' | 'today' | 'week' | 'month';
 type StatusFilter = 'all' | 'new' | 'read' | 'responded' | 'archived';
-
-interface Inquiry {
-  id: string;
-  email: string;
-  subject: string;
-  message: string;
-  status: 'new' | 'read' | 'responded' | 'archived';
-  is_read: boolean;
-  created_at: string;
-  updated_at: string;
-  responded_at?: string;
-  responded_by?: string;
-  response_message?: string;
-  responder?: {
-    full_name: string;
-    username: string;
-  };
-}
 
 export function InquiryManager() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
@@ -494,21 +484,14 @@ export function InquiryManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <Mail className="h-6 w-6 text-purple-600" />
-          <h3 className="text-lg font-medium text-gray-900">Inquiries</h3>
-          <div className="flex space-x-2">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800`}>
-              Total: {inquiries.length}
-            </span>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800`}>
-              New: {inquiries.filter(i => i.status === 'new').length}
-            </span>
+      {/* Header with stats */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Mail className="h-6 w-6 text-purple-600" />
+            <h3 className="text-lg font-medium text-gray-900">Inquiries</h3>
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-3">
+          
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -518,68 +501,125 @@ export function InquiryManager() {
             <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
-      </div>
-
-      {/* Filters and Search */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-          <div className="flex-1 flex items-center space-x-2">
-            <Search className="h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search inquiries by email, subject, or content..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-            />
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Inbox className="h-5 w-5 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Total</span>
+            </div>
+            <span className="text-xl font-bold text-blue-900">{inquiries.length}</span>
           </div>
           
-          <div className="flex flex-wrap gap-2">
+          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-              >
-                <option value="all">All Status</option>
-                <option value="new">New</option>
-                <option value="read">Read</option>
-                <option value="responded">Responded</option>
-                <option value="archived">Archived</option>
-              </select>
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              <span className="text-sm font-medium text-yellow-800">New</span>
+            </div>
+            <span className="text-xl font-bold text-yellow-900">{inquiries.filter(i => i.status === 'new').length}</span>
+          </div>
+          
+          <div className="bg-green-50 p-3 rounded-lg border border-green-100 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <CheckSquare className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-green-800">Responded</span>
+            </div>
+            <span className="text-xl font-bold text-green-900">{inquiries.filter(i => i.status === 'responded').length}</span>
+          </div>
+          
+          <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <ArchiveIcon className="h-5 w-5 text-gray-600" />
+              <span className="text-sm font-medium text-gray-800">Archived</span>
+            </div>
+            <span className="text-xl font-bold text-gray-900">{inquiries.filter(i => i.status === 'archived').length}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Email-like Interface */}
+      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        {/* Toolbar */}
+        <div className="bg-gray-50 p-3 border-b flex flex-wrap items-center justify-between gap-3">
+          {/* Left side actions */}
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectAll}
+                onChange={handleSelectAll}
+                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-600">Select All</span>
+            </label>
+            
+            {selectedInquiries.length > 0 && (
+              <div className="flex items-center space-x-2 ml-4">
+                <button
+                  onClick={handleBatchMarkAsRead}
+                  className="p-1.5 rounded hover:bg-gray-200 text-gray-700"
+                  title="Mark as Read"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleBatchArchive}
+                  className="p-1.5 rounded hover:bg-gray-200 text-gray-700"
+                  title="Archive"
+                >
+                  <Archive className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleBatchDelete}
+                  className="p-1.5 rounded hover:bg-gray-200 text-red-600"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* Right side filters */}
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search inquiries by email..."
+                className="pl-9 pr-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
             </div>
             
-            <div className="flex items-center space-x-2">
-              <Clock className="h-4 w-4 text-gray-500" />
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">Last 7 Days</option>
-                <option value="month">Last 30 Days</option>
-              </select>
-            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-sm"
+            >
+              <option value="all">All Status</option>
+              <option value="new">New</option>
+              <option value="read">Read</option>
+              <option value="responded">Responded</option>
+              <option value="archived">Archived</option>
+            </select>
             
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <select
-                value={sortField}
-                onChange={(e) => setSortField(e.target.value as SortField)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-              >
-                <option value="created_at">Sort by Date</option>
-                <option value="email">Sort by Email</option>
-                <option value="subject">Sort by Subject</option>
-              </select>
-            </div>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+              className="px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-sm"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
             
             <button
               onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-              className="flex items-center space-x-1 px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="p-1.5 rounded hover:bg-gray-200 text-gray-700"
+              title={`Sort ${sortDirection === 'asc' ? 'Descending' : 'Ascending'}`}
             >
               {sortDirection === 'asc' ? (
                 <ArrowUp className="h-4 w-4" />
@@ -587,88 +627,38 @@ export function InquiryManager() {
                 <ArrowDown className="h-4 w-4" />
               )}
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Batch Actions */}
-      {selectedInquiries.length > 0 && (
-        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="text-purple-800 font-medium">{selectedInquiries.length} inquiry(s) selected</span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleBatchMarkAsRead}
-              className="flex items-center space-x-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              <CheckCircle className="h-4 w-4" />
-              <span>Mark as Read</span>
-            </button>
-            <button
-              onClick={handleBatchArchive}
-              className="flex items-center space-x-1 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
-            >
-              <Archive className="h-4 w-4" />
-              <span>Archive</span>
-            </button>
+            
             <button
               onClick={handleExport}
-              className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              className="p-1.5 rounded hover:bg-gray-200 text-gray-700"
+              title="Export All Inquiries"
             >
               <Download className="h-4 w-4" />
-              <span>Export</span>
-            </button>
-            <button
-              onClick={handleBatchDelete}
-              className="flex items-center space-x-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Delete</span>
             </button>
           </div>
         </div>
-      )}
-
-      {/* Main Content */}
-      <div className="flex flex-col lg:flex-row space-y-6 lg:space-y-0 lg:space-x-6">
-        {/* Inquiries List */}
-        <div className="lg:w-1/2 space-y-4">
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
-              <h4 className="font-medium text-gray-900 flex items-center space-x-2">
-                <Mail className="h-4 w-4 text-purple-600" />
-                <span>Inquiries</span>
-                <span className="text-sm text-gray-500">({filteredInquiries.length})</span>
-              </h4>
-              <div className="flex items-center">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectAll}
-                    onChange={handleSelectAll}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-600">Select All</span>
-                </label>
-              </div>
-            </div>
-            
-            <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
-              {filteredInquiries.length > 0 ? (
-                filteredInquiries.map((inquiry) => {
-                  const isSelected = selectedInquiries.includes(inquiry.id);
-                  const isActive = selectedInquiry?.id === inquiry.id;
-                  
-                  return (
-                    <div 
-                      key={inquiry.id} 
-                      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                        isActive ? 'bg-purple-50 border-l-4 border-purple-500' : ''
-                      } ${inquiry.status === 'new' ? 'bg-blue-50' : ''}`}
-                    >
+        
+        {/* Email List and Detail View */}
+        <div className="flex h-[calc(100vh-300px)] min-h-[500px]">
+          {/* Email List */}
+          <div className="w-1/3 border-r overflow-y-auto">
+            {filteredInquiries.length > 0 ? (
+              filteredInquiries.map((inquiry) => {
+                const isSelected = selectedInquiries.includes(inquiry.id);
+                const isActive = selectedInquiry?.id === inquiry.id;
+                const isUnread = inquiry.status === 'new';
+                
+                return (
+                  <div 
+                    key={inquiry.id} 
+                    className={`border-b cursor-pointer transition-colors ${
+                      isActive ? 'bg-purple-50' : isUnread ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleSelectInquiry(inquiry)}
+                  >
+                    <div className="p-3">
                       <div className="flex items-start space-x-3">
-                        <div className="flex items-center h-5">
+                        <div className="flex items-center h-5 pt-1">
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -678,232 +668,236 @@ export function InquiryManager() {
                           />
                         </div>
                         
-                        <div 
-                          className="flex-1 min-w-0"
-                          onClick={() => handleSelectInquiry(inquiry)}
-                        >
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <h5 className="text-sm font-medium text-gray-900 truncate">{inquiry.subject}</h5>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(inquiry.status)}`}>
-                              {inquiry.status}
+                            <div className="flex items-center space-x-2">
+                              {isUnread && <div className="w-2 h-2 rounded-full bg-blue-600"></div>}
+                              <h5 className={`text-sm ${isUnread ? 'font-bold' : 'font-medium'} text-gray-900 truncate`}>
+                                {inquiry.email}
+                              </h5>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {formatDistanceToNow(parseISO(inquiry.created_at), { addSuffix: true })}
                             </span>
                           </div>
                           
-                          <div className="flex items-center text-xs text-gray-600 mb-1">
-                            <Mail className="h-3 w-3 mr-1" />
-                            <span className="truncate">{inquiry.email}</span>
-                          </div>
+                          <h6 className={`text-sm ${isUnread ? 'font-semibold' : 'font-normal'} text-gray-800 truncate`}>
+                            {inquiry.subject}
+                          </h6>
                           
-                          <p className="text-sm text-gray-600 line-clamp-2">
-                            {inquiry.message}
+                          <p className="text-xs text-gray-500 truncate">
+                            {inquiry.message.substring(0, 100)}
+                            {inquiry.message.length > 100 ? '...' : ''}
                           </p>
                           
-                          <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-                            <span>{format(parseISO(inquiry.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                          <div className="flex items-center mt-1 space-x-2">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs ${getStatusColor(inquiry.status)}`}>
+                              {inquiry.status}
+                            </span>
+                            
                             {inquiry.status === 'responded' && (
-                              <span className="flex items-center">
-                                <MessageSquare className="h-3 w-3 mr-1 text-green-500" />
-                                <span>Responded</span>
+                              <span className="text-xs text-green-600 flex items-center">
+                                <MessageSquare className="h-3 w-3 mr-1" />
+                                <span>Replied</span>
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="p-8 text-center">
-                  <Mail className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No inquiries match your filters</p>
-                </div>
-              )}
-            </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-8 text-center">
+                <Mail className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No inquiries match your filters</p>
+              </div>
+            )}
           </div>
           
-          {/* Export All Button */}
-          <div className="flex justify-end">
-            <button
-              onClick={handleExport}
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
-            >
-              <Download className="h-4 w-4" />
-              <span className="text-sm">Export All Inquiries</span>
-            </button>
-          </div>
-        </div>
-        
-        {/* Inquiry Detail View */}
-        <div className="lg:w-1/2">
-          {selectedInquiry ? (
-            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-              <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
-                <h4 className="font-medium text-gray-900 flex items-center space-x-2">
-                  {getStatusIcon(selectedInquiry.status)}
-                  <span>Inquiry Details</span>
-                </h4>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setSelectedInquiry(null)}
-                    className="text-gray-500 hover:text-gray-700"
-                    title="Close details"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                {/* Header */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+          {/* Email Detail View */}
+          <div className="w-2/3 overflow-y-auto">
+            {selectedInquiry ? (
+              <div className="h-full flex flex-col">
+                {/* Email Header */}
+                <div className="p-4 border-b bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
                     <h3 className="text-xl font-semibold text-gray-900">{selectedInquiry.subject}</h3>
                     <div className="flex items-center space-x-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedInquiry.status)}`}>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedInquiry.status)}`}>
                         {selectedInquiry.status}
                       </span>
+                      <button
+                        onClick={() => setSelectedInquiry(null)}
+                        className="text-gray-500 hover:text-gray-700 p-1"
+                        title="Close"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
                     </div>
                   </div>
                   
-                  <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                    <div className="flex items-center space-x-2">
-                      <Mail className="h-4 w-4 text-blue-600" />
-                      <p className="text-sm font-medium text-blue-800">{selectedInquiry.email}</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-blue-800 font-bold">{selectedInquiry.email.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{selectedInquiry.email}</p>
+                          <div className="flex items-center text-xs text-gray-500">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            <span>{format(parseISO(selectedInquiry.created_at), 'MMMM dd, yyyy HH:mm')}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Received on {format(parseISO(selectedInquiry.created_at), 'MMMM dd, yyyy HH:mm:ss')}
-                    </p>
+                    
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleComposeEmail(selectedInquiry.email)}
+                        className="p-1.5 rounded hover:bg-gray-200 text-blue-600"
+                        title="Reply via Email"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleArchive(selectedInquiry)}
+                        className="p-1.5 rounded hover:bg-gray-200 text-yellow-600"
+                        title="Archive"
+                      >
+                        <Archive className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(selectedInquiry)}
+                        className="p-1.5 rounded hover:bg-gray-200 text-red-600"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      <div className="relative">
+                        <button
+                          className="p-1.5 rounded hover:bg-gray-200 text-gray-600"
+                          title="More Actions"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 
-                {/* Content */}
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Message</h4>
-                    <div className="bg-gray-50 p-4 rounded-md border whitespace-pre-wrap">
+                {/* Email Body */}
+                <div className="p-6 flex-grow">
+                  <div className="bg-white rounded-lg mb-6">
+                    <div className="whitespace-pre-wrap text-gray-800">
                       {selectedInquiry.message}
                     </div>
                   </div>
                   
-                  {/* Response Section */}
-                  {selectedInquiry.status === 'responded' ? (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Response</h4>
-                      <div className="bg-green-50 p-4 rounded-md border border-green-200">
-                        <div className="mb-2 pb-2 border-b border-green-200">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <MessageSquare className="h-4 w-4 text-green-600" />
-                              <span className="text-sm font-medium text-green-800">
-                                Responded by {selectedInquiry.responder?.full_name || 'Unknown'}
+                  {/* Response History */}
+                  {selectedInquiry.status === 'responded' && (
+                    <div className="mt-8 border-t pt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Response History</h4>
+                      <div className="bg-gray-50 p-4 rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                              <span className="text-green-800 font-bold">
+                                {selectedInquiry.responder?.full_name.charAt(0).toUpperCase() || 'A'}
                               </span>
                             </div>
-                            <span className="text-xs text-green-600">
-                              {selectedInquiry.responded_at && format(parseISO(selectedInquiry.responded_at), 'MMM dd, yyyy HH:mm')}
-                            </span>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedInquiry.responder?.full_name || 'Admin'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {selectedInquiry.responded_at && format(parseISO(selectedInquiry.responded_at), 'MMMM dd, yyyy HH:mm')}
+                              </p>
+                            </div>
                           </div>
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                            Response
+                          </span>
                         </div>
-                        <p className="text-sm text-green-800 whitespace-pre-wrap">
+                        <div className="pl-10 whitespace-pre-wrap text-gray-800">
                           {selectedInquiry.response_message}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Compose Response</h4>
-                      <textarea
-                        value={responseText}
-                        onChange={(e) => setResponseText(e.target.value)}
-                        rows={5}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Type your response here..."
-                      ></textarea>
-                      <div className="flex justify-end mt-2">
-                        <button
-                          onClick={handleSendResponse}
-                          disabled={!responseText.trim()}
-                          className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                          <Send className="h-4 w-4" />
-                          <span>Send Response</span>
-                        </button>
+                        </div>
                       </div>
                     </div>
                   )}
                   
-                  {/* Quick Actions */}
-                  <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                    <h4 className="text-sm font-medium text-blue-800 mb-3">Quick Actions</h4>
-                    <div className="flex flex-wrap gap-3">
-                      <button 
-                        onClick={() => handleComposeEmail(selectedInquiry.email)}
-                        className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                      >
-                        <Send className="h-4 w-4" />
-                        <span>Compose Email</span>
-                      </button>
-                      
-                      <button className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 transition-colors flex items-center space-x-2">
-                        <UserPlus className="h-4 w-4" />
-                        <span>Create Account</span>
-                      </button>
-                      
-                      <a 
-                        href={`mailto:${selectedInquiry.email}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 transition-colors flex items-center space-x-2"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        <span>Open in Email Client</span>
-                      </a>
+                  {/* Response Form */}
+                  {selectedInquiry.status !== 'responded' && (
+                    <div className="mt-8 border-t pt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Compose Response</h4>
+                      <div className="bg-gray-50 p-4 rounded-lg border">
+                        <textarea
+                          value={responseText}
+                          onChange={(e) => setResponseText(e.target.value)}
+                          rows={6}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 mb-3"
+                          placeholder="Type your response here..."
+                        ></textarea>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <span>Responding as {user?.full_name}</span>
+                          </div>
+                          <button
+                            onClick={handleSendResponse}
+                            disabled={!responseText.trim()}
+                            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            <Send className="h-4 w-4" />
+                            <span>Send Response</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
                 
-                {/* Actions */}
-                <div className="flex justify-between pt-4 border-t">
-                  <div className="flex space-x-3">
-                    {selectedInquiry.status === 'new' && (
-                      <button
-                        onClick={() => handleMarkAsRead(selectedInquiry)}
-                        className="flex items-center space-x-2 text-blue-600 hover:text-blue-800"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>Mark as Read</span>
-                      </button>
-                    )}
-                    
-                    {selectedInquiry.status !== 'archived' && (
-                      <button
-                        onClick={() => handleArchive(selectedInquiry)}
-                        className="flex items-center space-x-2 text-yellow-600 hover:text-yellow-800"
-                      >
-                        <Archive className="h-4 w-4" />
-                        <span>Archive</span>
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={() => handleDelete(selectedInquiry)}
-                      className="flex items-center space-x-2 text-red-600 hover:text-red-800"
+                {/* Quick Actions Footer */}
+                <div className="p-4 border-t bg-gray-50">
+                  <div className="flex flex-wrap gap-2">
+                    <button 
+                      onClick={() => handleComposeEmail(selectedInquiry.email)}
+                      className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700 transition-colors flex items-center space-x-2"
                     >
-                      <Trash2 className="h-4 w-4" />
-                      <span>Delete</span>
+                      <Send className="h-4 w-4" />
+                      <span>Compose Email</span>
                     </button>
+                    
+                    <button className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 transition-colors flex items-center space-x-2">
+                      <UserPlus className="h-4 w-4" />
+                      <span>Create Account</span>
+                    </button>
+                    
+                    <a 
+                      href={`mailto:${selectedInquiry.email}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="bg-purple-600 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-700 transition-colors flex items-center space-x-2"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>Open in Email Client</span>
+                    </a>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
-              <Mail className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No inquiry selected</h3>
-              <p className="text-gray-500 mb-4">Select an inquiry from the list to view details</p>
-            </div>
-          )}
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center p-8">
+                  <Mail className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-medium text-gray-900 mb-2">No inquiry selected</h3>
+                  <p className="text-gray-500 max-w-md">
+                    Select an inquiry from the list to view its details and respond to it.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
