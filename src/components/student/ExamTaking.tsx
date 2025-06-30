@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase, Examination, ExamQuestion, ExamSubmission } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Clock, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -16,7 +16,15 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [savingAnswers, setSavingAnswers] = useState<Record<string, boolean>>({});
+  const [saveTimeouts, setSaveTimeouts] = useState<Record<string, NodeJS.Timeout>>({});
   const { user } = useAuth();
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [saveTimeouts]);
 
   useEffect(() => {
     initializeExam();
@@ -26,12 +34,16 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
     if (timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && submission) {
+    } else if (timeLeft === 0 && submission && !submitting) {
       handleSubmit();
     }
-  }, [timeLeft]);
+  }, [timeLeft, submission, submitting]);
 
   const getOrCreateSubmission = async (questionsData: ExamQuestion[]) => {
+    if (!user?.id) {
+      throw new Error('User not authenticated');
+    }
+
     const maxScore = questionsData.reduce((sum, q) => sum + q.points, 0);
     
     // Use upsert to handle the race condition atomically
@@ -39,7 +51,7 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
       .from('exam_submissions')
       .upsert({
         exam_id: examination.id,
-        student_id: user?.id,
+        student_id: user.id,
         max_score: maxScore,
         status: 'in_progress'
       }, {
@@ -57,6 +69,10 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
 
   const initializeExam = async () => {
     try {
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
       // Fetch questions
       const { data: questionsData, error: questionsError } = await supabase
         .from('exam_questions')
@@ -65,6 +81,10 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
         .order('order_index');
 
       if (questionsError) throw questionsError;
+
+      if (!questionsData || questionsData.length === 0) {
+        throw new Error('No questions found for this exam');
+      }
 
       // Get or create submission with proper race condition handling
       const submissionData = await getOrCreateSubmission(questionsData);
@@ -79,9 +99,11 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
 
       // Convert answers to state format
       const answersMap: Record<string, string> = {};
-      answersData.forEach(answer => {
-        answersMap[answer.question_id] = answer.answer_text || '';
-      });
+      if (answersData) {
+        answersData.forEach(answer => {
+          answersMap[answer.question_id] = answer.answer_text || '';
+        });
+      }
 
       // Calculate time left
       const startTime = new Date(submissionData.started_at).getTime();
@@ -95,45 +117,69 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
       setTimeLeft(remaining);
     } catch (error) {
       console.error('Error initializing exam:', error);
-      alert('Error loading exam. Please try again.');
+      alert(`Error loading exam: ${error instanceof Error ? error.message : 'Please try again.'}`);
       onComplete();
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAnswerChange = async (questionId: string, answer: string) => {
+  const saveAnswerToDatabase = useCallback(async (questionId: string, answer: string, submissionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('exam_answers')
+        .upsert({
+          submission_id: submissionId,
+          question_id: questionId,
+          answer_text: answer,
+        }, {
+          onConflict: 'submission_id,question_id'
+        });
+
+      if (error) {
+        console.error('Error saving answer:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error saving answer:', error);
+      // Could add toast notification here
+      throw error;
+    }
+  }, []);
+
+  const handleAnswerChange = useCallback((questionId: string, answer: string) => {
     // Update local state immediately for responsive UI
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
 
+    // Clear existing timeout for this question
+    if (saveTimeouts[questionId]) {
+      clearTimeout(saveTimeouts[questionId]);
+    }
+
     // Debounce the database save to avoid too many requests
-    if (submission) {
+    if (submission?.id) {
       setSavingAnswers(prev => ({ ...prev, [questionId]: true }));
       
-      try {
-        const { error } = await supabase
-          .from('exam_answers')
-          .upsert({
-            submission_id: submission.id,
-            question_id: questionId,
-            answer_text: answer,
-          }, {
-            onConflict: 'submission_id,question_id'
+      const timeout = setTimeout(async () => {
+        try {
+          await saveAnswerToDatabase(questionId, answer, submission.id);
+        } catch (error) {
+          console.error('Failed to save answer:', error);
+        } finally {
+          setSavingAnswers(prev => ({ ...prev, [questionId]: false }));
+          setSaveTimeouts(prev => {
+            const newTimeouts = { ...prev };
+            delete newTimeouts[questionId];
+            return newTimeouts;
           });
-
-        if (error) {
-          console.error('Error saving answer:', error);
-          // Optionally show a toast notification here
         }
-      } catch (error) {
-        console.error('Error saving answer:', error);
-      } finally {
-        setSavingAnswers(prev => ({ ...prev, [questionId]: false }));
-      }
-    }
-  };
+      }, 1000); // 1 second debounce
 
-  const calculateScore = () => {
+      setSaveTimeouts(prev => ({ ...prev, [questionId]: timeout }));
+    }
+  }, [submission?.id, saveTimeouts, saveAnswerToDatabase]);
+
+  const calculateScore = useCallback(() => {
     let totalScore = 0;
     
     questions.forEach(question => {
@@ -145,43 +191,60 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
     });
 
     return totalScore;
-  };
+  }, [questions, answers]);
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || !submission?.id) return;
     setSubmitting(true);
 
     try {
+      // Clear any pending save timeouts
+      Object.values(saveTimeouts).forEach(timeout => clearTimeout(timeout));
+      setSaveTimeouts({});
+
+      // Save any pending answers immediately
+      const savePromises = Object.entries(answers).map(([questionId, answer]) => 
+        saveAnswerToDatabase(questionId, answer, submission.id)
+      );
+      
+      await Promise.all(savePromises);
+
       const totalScore = calculateScore();
 
       // Update submission
-      await supabase
+      const { error: submissionError } = await supabase
         .from('exam_submissions')
         .update({
           submitted_at: new Date().toISOString(),
           total_score: totalScore,
           status: 'submitted'
         })
-        .eq('id', submission?.id);
+        .eq('id', submission.id);
+
+      if (submissionError) throw submissionError;
 
       // Update answer scores for multiple choice questions
-      for (const question of questions) {
+      const scoreUpdatePromises = questions.map(async (question) => {
         if (question.question_type === 'multiple_choice') {
           const userAnswer = answers[question.id];
           const pointsEarned = userAnswer === question.correct_answer ? question.points : 0;
           
-          await supabase
+          const { error } = await supabase
             .from('exam_answers')
             .update({ points_earned: pointsEarned })
-            .eq('submission_id', submission?.id)
+            .eq('submission_id', submission.id)
             .eq('question_id', question.id);
+
+          if (error) throw error;
         }
-      }
+      });
+
+      await Promise.all(scoreUpdatePromises);
 
       onComplete();
     } catch (error) {
       console.error('Error submitting exam:', error);
-      alert('Error submitting exam. Please try again.');
+      alert(`Error submitting exam: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setSubmitting(false);
     }
@@ -206,6 +269,23 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!submission) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Exam</h2>
+          <p className="text-gray-600 mb-4">Unable to initialize exam submission.</p>
+          <button
+            onClick={onComplete}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -286,19 +366,23 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
 
               {question.question_type === 'multiple_choice' ? (
                 <div className="space-y-3">
-                  {question.options.map((option, optionIndex) => (
-                    <label key={optionIndex} className="flex items-center space-x-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name={`question_${question.id}`}
-                        value={option}
-                        checked={answers[question.id] === option}
-                        onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                      />
-                      <span className="text-gray-900">{option}</span>
-                    </label>
-                  ))}
+                  {question.options && question.options.length > 0 ? (
+                    question.options.map((option, optionIndex) => (
+                      <label key={optionIndex} className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`question_${question.id}`}
+                          value={option}
+                          checked={answers[question.id] === option}
+                          onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="text-gray-900">{option}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="text-red-600">No options available for this question.</p>
+                  )}
                 </div>
               ) : (
                 <div className="relative">
@@ -310,7 +394,7 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
                     placeholder="Type your answer here..."
                   />
                   <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-                    {answers[question.id]?.length || 0} characters
+                    {(answers[question.id] || '').length} characters
                   </div>
                 </div>
               )}

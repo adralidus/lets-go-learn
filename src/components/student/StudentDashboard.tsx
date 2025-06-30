@@ -21,6 +21,10 @@ export function StudentDashboard() {
 
   const fetchData = async () => {
     try {
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
       // Fetch active examinations
       const { data: examsData, error: examsError } = await supabase
         .from('examinations')
@@ -34,7 +38,7 @@ export function StudentDashboard() {
       const { data: submissionsData, error: submissionsError } = await supabase
         .from('exam_submissions')
         .select('*')
-        .eq('student_id', user?.id)
+        .eq('student_id', user.id)
         .order('created_at', { ascending: false });
 
       if (submissionsError) throw submissionsError;
@@ -55,7 +59,7 @@ export function StudentDashboard() {
     
     const submission = submissions.find(s => s.exam_id === exam.id);
     
-    if (submission?.status === 'submitted') {
+    if (submission?.status === 'submitted' || submission?.status === 'graded') {
       return { status: 'completed', label: 'Completed', color: 'green' };
     }
     
@@ -314,7 +318,7 @@ export function StudentDashboard() {
                       </div>
                     </div>
 
-                    {submission && submission.status === 'submitted' && (
+                    {submission && (submission.status === 'submitted' || submission.status === 'graded') && (
                       <div className="mb-4 p-3 bg-gray-50 rounded-md">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-gray-600">Score:</span>
@@ -350,7 +354,7 @@ export function StudentDashboard() {
                         </button>
                       )}
                       
-                      {submission?.status === 'submitted' && (
+                      {(submission?.status === 'submitted' || submission?.status === 'graded') && (
                         <button
                           onClick={() => handleViewResults(exam)}
                           className="flex-1 flex items-center justify-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"

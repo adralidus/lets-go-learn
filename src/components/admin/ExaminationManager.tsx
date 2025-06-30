@@ -105,12 +105,16 @@ export function ExaminationManager() {
   };
 
   const handleCreateFolder = async (name: string, description: string) => {
+    if (!user?.id) {
+      throw new Error('User not authenticated');
+    }
+
     const { error } = await supabase
       .from('exam_folders')
       .insert({
         name,
         description,
-        created_by: user?.id
+        created_by: user.id
       });
 
     if (error) throw error;
@@ -148,6 +152,7 @@ export function ExaminationManager() {
       fetchData();
     } catch (error) {
       console.error('Error moving exam:', error);
+      alert('Error moving exam. Please try again.');
     }
   };
 
@@ -186,6 +191,11 @@ export function ExaminationManager() {
   };
 
   const handleDuplicateExam = async (exam: Examination) => {
+    if (!user?.id) {
+      alert('User not authenticated');
+      return;
+    }
+
     try {
       // First, duplicate the examination
       const { data: newExam, error: examError } = await supabase
@@ -198,7 +208,7 @@ export function ExaminationManager() {
           duration_minutes: exam.duration_minutes,
           is_active: false, // Start as inactive
           folder_id: exam.folder_id,
-          created_by: user?.id,
+          created_by: user.id,
         })
         .select()
         .single();

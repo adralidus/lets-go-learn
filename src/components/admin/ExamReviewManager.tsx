@@ -44,12 +44,12 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
       if (studentsError) throw studentsError;
 
       // Filter students to only include those with submissions
-      const studentsWithSubmissions = studentsData.filter(student => 
-        submissionsData.some(submission => submission.student_id === student.id)
-      );
+      const studentsWithSubmissions = studentsData?.filter(student => 
+        submissionsData?.some(submission => submission.student_id === student.id)
+      ) || [];
 
       setSubmissions(submissionsData || []);
-      setStudents(studentsWithSubmissions || []);
+      setStudents(studentsWithSubmissions);
     } catch (error) {
       console.error('Error fetching submissions:', error);
     } finally {
@@ -112,16 +112,18 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
           : answer
       );
       
-      const newTotalScore = updatedAnswers.reduce((sum, answer) => sum + answer.points_earned, 0);
+      const newTotalScore = updatedAnswers.reduce((sum, answer) => sum + (answer.points_earned || 0), 0);
 
       // Update submission total score
-      await supabase
+      const { error: submissionError } = await supabase
         .from('exam_submissions')
         .update({ 
           total_score: newTotalScore,
           status: 'graded'
         })
         .eq('id', selectedSubmission?.id);
+
+      if (submissionError) throw submissionError;
 
       // Update local submission state
       if (selectedSubmission) {
@@ -306,7 +308,7 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
                             type="number"
                             min="0"
                             max={question.points}
-                            value={answer.points_earned}
+                            value={answer.points_earned || 0}
                             onChange={(e) => updateAnswerScore(answer.id, parseInt(e.target.value) || 0)}
                             className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
                           />
@@ -318,33 +320,37 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
 
                     {question.question_type === 'multiple_choice' ? (
                       <div className="space-y-3">
-                        {question.options.map((option, optionIndex) => {
-                          const isUserAnswer = answer.answer_text === option;
-                          const isCorrectAnswer = option === question.correct_answer;
-                          
-                          return (
-                            <div
-                              key={optionIndex}
-                              className={`flex items-center space-x-3 p-3 rounded-md ${
-                                isCorrectAnswer ? 'bg-green-50 border border-green-200' :
-                                isUserAnswer && !isCorrectAnswer ? 'bg-red-50 border border-red-200' :
-                                'bg-gray-50'
-                              }`}
-                            >
-                              <div className="flex items-center space-x-2">
-                                {isCorrectAnswer && <CheckCircle className="h-4 w-4 text-green-600" />}
-                                {isUserAnswer && !isCorrectAnswer && <XCircle className="h-4 w-4 text-red-600" />}
-                                {isUserAnswer && (
-                                  <span className="text-xs font-medium text-gray-600">Student's answer</span>
-                                )}
-                                {isCorrectAnswer && (
-                                  <span className="text-xs font-medium text-green-600">Correct answer</span>
-                                )}
+                        {question.options && question.options.length > 0 ? (
+                          question.options.map((option, optionIndex) => {
+                            const isUserAnswer = answer.answer_text === option;
+                            const isCorrectAnswer = option === question.correct_answer;
+                            
+                            return (
+                              <div
+                                key={optionIndex}
+                                className={`flex items-center space-x-3 p-3 rounded-md ${
+                                  isCorrectAnswer ? 'bg-green-50 border border-green-200' :
+                                  isUserAnswer && !isCorrectAnswer ? 'bg-red-50 border border-red-200' :
+                                  'bg-gray-50'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  {isCorrectAnswer && <CheckCircle className="h-4 w-4 text-green-600" />}
+                                  {isUserAnswer && !isCorrectAnswer && <XCircle className="h-4 w-4 text-red-600" />}
+                                  {isUserAnswer && (
+                                    <span className="text-xs font-medium text-gray-600">Student's answer</span>
+                                  )}
+                                  {isCorrectAnswer && (
+                                    <span className="text-xs font-medium text-green-600">Correct answer</span>
+                                  )}
+                                </div>
+                                <span className="text-gray-900">{option}</span>
                               </div>
-                              <span className="text-gray-900">{option}</span>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        ) : (
+                          <p className="text-red-600">No options available for this question.</p>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-3">
