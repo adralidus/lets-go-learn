@@ -60,8 +60,8 @@ export function InquiryManager() {
 
   const fetchInquiries = async () => {
     try {
+      console.log("Fetching inquiries...");
       setRefreshing(true);
-      console.log('Fetching inquiries...');
       
       const { data, error } = await supabase
         .from('inquiries')
@@ -76,7 +76,7 @@ export function InquiryManager() {
         throw error;
       }
       
-      console.log('Fetched inquiries:', data);
+      console.log("Inquiries fetched:", data?.length || 0, "records");
       setInquiries(data || []);
       setRefreshing(false);
     } catch (error) {
