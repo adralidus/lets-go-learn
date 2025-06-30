@@ -3,6 +3,7 @@ import { Layout } from '../Layout';
 import { ExaminationManager } from './ExaminationManager';
 import { UserManager } from './UserManager';
 import { ExamReviewManager } from './ExamReviewManager';
+import { ReportsManager } from './ReportsManager';
 import { Users, FileText, BarChart3, ClipboardCheck } from 'lucide-react';
 
 type TabType = 'examinations' | 'users' | 'reviews' | 'reports';
@@ -14,7 +15,7 @@ export function AdminDashboard() {
     { id: 'examinations' as TabType, label: 'Examinations', icon: FileText },
     { id: 'users' as TabType, label: 'Users', icon: Users },
     { id: 'reviews' as TabType, label: 'Exam Reviews', icon: ClipboardCheck },
-    { id: 'reports' as TabType, label: 'Reports', icon: BarChart3 },
+    { id: 'reports' as TabType, label: 'Reports & Analytics', icon: BarChart3 },
   ];
 
   return (
@@ -48,13 +49,7 @@ export function AdminDashboard() {
           {activeTab === 'examinations' && <ExaminationManager />}
           {activeTab === 'users' && <UserManager />}
           {activeTab === 'reviews' && <ExamReviewManager onBack={() => setActiveTab('examinations')} />}
-          {activeTab === 'reports' && (
-            <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Reports Coming Soon</h3>
-              <p className="text-gray-600">Detailed analytics and reporting features will be available here.</p>
-            </div>
-          )}
+          {activeTab === 'reports' && <ReportsManager />}
         </div>
       </div>
     </Layout>
