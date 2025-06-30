@@ -22,7 +22,7 @@ export function SystemNotifications() {
         .select(`
           *,
           created_by_user:users!system_notifications_created_by_fkey(full_name, username),
-          target_user:users(full_name, username, email)
+          target_user:users!system_notifications_target_user_id_fkey(full_name, username, email)
         `)
         .order('created_at', { ascending: false });
 
