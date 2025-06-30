@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, User } from '../../lib/supabase';
-import { X } from 'lucide-react';
+import { X, UserCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface UserFormProps {
   user?: User | null;
@@ -14,26 +15,59 @@ interface FormData {
   username: string;
   password: string;
   role: 'admin' | 'student';
+  assigned_admin_id?: string;
 }
 
-export function UserForm({ user, onClose }: UserFormProps) {
+export function UserForm({ user: editUser, onClose }: UserFormProps) {
   const [loading, setLoading] = useState(false);
+  const [admins, setAdmins] = useState<User[]>([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
+  const { user: currentUser } = useAuth();
   
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     defaultValues: {
-      full_name: user?.full_name || '',
-      email: user?.email || '',
-      username: user?.username || '',
+      full_name: editUser?.full_name || '',
+      email: editUser?.email || '',
+      username: editUser?.username || '',
       password: '',
-      role: user?.role || 'student',
+      role: editUser?.role as 'admin' | 'student' || 'student',
+      assigned_admin_id: editUser?.assigned_admin_id || '',
     }
   });
+
+  const selectedRole = watch('role');
+
+  useEffect(() => {
+    if (selectedRole === 'student') {
+      fetchAdmins();
+    } else {
+      setLoadingAdmins(false);
+    }
+  }, [selectedRole]);
+
+  const fetchAdmins = async () => {
+    try {
+      setLoadingAdmins(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, username, email, role')
+        .in('role', ['admin', 'super_admin'])
+        .order('full_name');
+
+      if (error) throw error;
+      setAdmins(data || []);
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     
     try {
-      if (user) {
+      if (editUser) {
         // Update existing user
         const updateData: any = {
           full_name: data.full_name,
@@ -47,23 +81,37 @@ export function UserForm({ user, onClose }: UserFormProps) {
           updateData.password_hash = data.password; // In production, hash this properly
         }
 
+        // Handle admin assignment for students
+        if (data.role === 'student') {
+          updateData.assigned_admin_id = data.assigned_admin_id || null;
+        } else {
+          updateData.assigned_admin_id = null; // Clear assignment for non-students
+        }
+
         const { error } = await supabase
           .from('users')
           .update(updateData)
-          .eq('id', user.id);
+          .eq('id', editUser.id);
 
         if (error) throw error;
       } else {
         // Create new user
+        const insertData: any = {
+          full_name: data.full_name,
+          email: data.email,
+          username: data.username,
+          password_hash: data.password, // In production, hash this properly
+          role: data.role,
+        };
+
+        // Handle admin assignment for students
+        if (data.role === 'student') {
+          insertData.assigned_admin_id = data.assigned_admin_id || null;
+        }
+
         const { error } = await supabase
           .from('users')
-          .insert({
-            full_name: data.full_name,
-            email: data.email,
-            username: data.username,
-            password_hash: data.password, // In production, hash this properly
-            role: data.role,
-          });
+          .insert(insertData);
 
         if (error) throw error;
       }
@@ -86,7 +134,7 @@ export function UserForm({ user, onClose }: UserFormProps) {
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         <div className="flex justify-between items-center p-6 border-b">
           <h3 className="text-lg font-medium text-gray-900">
-            {user ? 'Edit User' : 'Create Student Account'}
+            {editUser ? 'Edit User' : 'Create Student Account'}
           </h3>
           <button
             onClick={onClose}
@@ -142,19 +190,19 @@ export function UserForm({ user, onClose }: UserFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Password {user && <span className="text-gray-500">(leave blank to keep current)</span>}
+              Password {editUser && <span className="text-gray-500">(leave blank to keep current)</span>}
             </label>
             <input
               type="password"
               {...register('password', { 
-                required: !user ? 'Password is required' : false,
+                required: !editUser ? 'Password is required' : false,
                 minLength: {
                   value: 6,
                   message: 'Password must be at least 6 characters'
                 }
               })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder={user ? "Enter new password (optional)" : "Enter password"}
+              placeholder={editUser ? "Enter new password (optional)" : "Enter password"}
             />
             {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>}
           </div>
@@ -170,6 +218,48 @@ export function UserForm({ user, onClose }: UserFormProps) {
             </select>
           </div>
 
+          {selectedRole === 'student' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                <div className="flex items-center space-x-2">
+                  <UserCheck className="h-4 w-4 text-blue-600" />
+                  <span>Assign to Administrator</span>
+                  {currentUser?.role === 'super_admin' && <span className="text-red-500">*</span>}
+                </div>
+              </label>
+              {loadingAdmins ? (
+                <div className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-gray-500">Loading administrators...</span>
+                  </div>
+                </div>
+              ) : (
+                <select
+                  {...register('assigned_admin_id', { 
+                    required: currentUser?.role === 'super_admin' ? 'Administrator assignment is required' : false
+                  })}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">
+                    {currentUser?.role === 'super_admin' ? 'Select an administrator' : 'No assignment (optional)'}
+                  </option>
+                  {admins.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.full_name} (@{admin.username}) - {admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {errors.assigned_admin_id && <p className="text-red-600 text-sm mt-1">{errors.assigned_admin_id.message}</p>}
+              {currentUser?.role === 'super_admin' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  This student will be assigned to the selected administrator for management and oversight.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -180,10 +270,10 @@ export function UserForm({ user, onClose }: UserFormProps) {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (selectedRole === 'student' && loadingAdmins)}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              {loading ? 'Saving...' : user ? 'Update User' : 'Create Student'}
+              {loading ? 'Saving...' : editUser ? 'Update User' : 'Create Student'}
             </button>
           </div>
         </form>

@@ -17,6 +17,7 @@ export interface User {
   full_name: string;
   role: 'super_admin' | 'admin' | 'student';
   password_hash: string;
+  assigned_admin_id?: string; // New field for student-admin assignment
   last_login?: string;
   created_at: string;
   updated_at: string;
@@ -161,6 +162,22 @@ export interface SystemNotification {
   created_by_user?: User;
 }
 
+// Student-Admin assignment types
+export interface StudentAssignment {
+  student_id: string;
+  admin_id: string;
+  assigned_by: string;
+  assigned_at: string;
+}
+
+export interface AdminAssignmentStats {
+  admin_id: string;
+  admin_name: string;
+  admin_username: string;
+  assigned_students_count: number;
+  total_students: number;
+}
+
 // Super Admin utility functions
 export const logAdminActivity = async (
   adminId: string,
@@ -229,6 +246,38 @@ export const updateSystemSetting = async (
     p_setting_value: settingValue,
     p_updated_by: updatedBy
   });
+
+  if (error) throw error;
+  return data;
+};
+
+// Student-Admin assignment functions
+export const assignStudentToAdmin = async (
+  studentId: string,
+  adminId: string,
+  assignedBy: string
+) => {
+  const { data, error } = await supabase.rpc('assign_student_to_admin', {
+    student_user_id: studentId,
+    admin_user_id: adminId,
+    assigned_by_user_id: assignedBy
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAssignedStudents = async (adminId: string) => {
+  const { data, error } = await supabase.rpc('get_assigned_students', {
+    admin_user_id: adminId
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+export const getAdminAssignmentStats = async () => {
+  const { data, error } = await supabase.rpc('get_admin_assignment_stats');
 
   if (error) throw error;
   return data;

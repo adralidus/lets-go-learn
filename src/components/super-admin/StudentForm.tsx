@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, User, logAdminActivity } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { X } from 'lucide-react';
+import { X, UserCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 interface StudentFormProps {
@@ -14,10 +14,13 @@ interface FormData {
   email: string;
   username: string;
   password: string;
+  assigned_admin_id: string;
 }
 
 export function StudentForm({ student, onClose }: StudentFormProps) {
   const [loading, setLoading] = useState(false);
+  const [admins, setAdmins] = useState<User[]>([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
   const { user } = useAuth();
   
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -26,8 +29,30 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
       email: student?.email || '',
       username: student?.username || '',
       password: '',
+      assigned_admin_id: student?.assigned_admin_id || '',
     }
   });
+
+  useEffect(() => {
+    fetchAdmins();
+  }, []);
+
+  const fetchAdmins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, username, email, role')
+        .in('role', ['admin', 'super_admin'])
+        .order('full_name');
+
+      if (error) throw error;
+      setAdmins(data || []);
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -39,6 +64,7 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
           full_name: data.full_name,
           email: data.email,
           username: data.username,
+          assigned_admin_id: data.assigned_admin_id || null,
         };
 
         // Only update password if provided
@@ -62,7 +88,9 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
             student.id,
             { 
               student_name: data.full_name,
-              updated_fields: Object.keys(updateData)
+              updated_fields: Object.keys(updateData),
+              assigned_admin_id: data.assigned_admin_id,
+              previous_admin_id: student.assigned_admin_id
             }
           );
         }
@@ -76,6 +104,7 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
             username: data.username,
             password_hash: data.password,
             role: 'student',
+            assigned_admin_id: data.assigned_admin_id || null,
           })
           .select()
           .single();
@@ -91,7 +120,8 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
             newStudent.id,
             { 
               student_name: data.full_name,
-              student_email: data.email
+              student_email: data.email,
+              assigned_admin_id: data.assigned_admin_id
             }
           );
         }
@@ -188,6 +218,52 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
             {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>}
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              <div className="flex items-center space-x-2">
+                <UserCheck className="h-4 w-4 text-purple-600" />
+                <span>Assign to Administrator</span>
+                <span className="text-red-500">*</span>
+              </div>
+            </label>
+            {loadingAdmins ? (
+              <div className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                  <span className="text-gray-500">Loading administrators...</span>
+                </div>
+              </div>
+            ) : (
+              <select
+                {...register('assigned_admin_id', { 
+                  required: 'Administrator assignment is required' 
+                })}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+              >
+                <option value="">Select an administrator</option>
+                {admins.map((admin) => (
+                  <option key={admin.id} value={admin.id}>
+                    {admin.full_name} (@{admin.username}) - {admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                  </option>
+                ))}
+              </select>
+            )}
+            {errors.assigned_admin_id && <p className="text-red-600 text-sm mt-1">{errors.assigned_admin_id.message}</p>}
+            <p className="text-xs text-gray-500 mt-1">
+              This student will be assigned to the selected administrator for management and oversight.
+            </p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="flex items-start space-x-2">
+              <UserCheck className="h-4 w-4 text-blue-600 mt-0.5" />
+              <div className="text-blue-800 text-sm">
+                <p className="font-medium mb-1">Administrator Assignment</p>
+                <p>Students must be assigned to an administrator who will be responsible for managing their exams, grades, and academic progress.</p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -198,7 +274,7 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || loadingAdmins}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
             >
               {loading ? 'Saving...' : student ? 'Update Student' : 'Create Student'}
