@@ -27,9 +27,9 @@ export function SuperAdminDashboard() {
 
   const tabs = [
     { id: 'overview' as TabType, label: 'System Overview', icon: BarChart3 },
-    { id: 'admins' as TabType, label: 'Admin Management', icon: Shield },
+    { id: 'admins' as TabType, label: 'Instructor Management', icon: Shield },
     { id: 'students' as TabType, label: 'Student Management', icon: GraduationCap },
-    { id: 'permissions' as TabType, label: 'Admin Permissions', icon: Key },
+    { id: 'permissions' as TabType, label: 'Instructor Permissions', icon: Key },
     { id: 'settings' as TabType, label: 'System Settings', icon: Settings },
     { id: 'activity' as TabType, label: 'Activity Logs', icon: Activity },
     { id: 'sessions' as TabType, label: 'User Sessions', icon: Monitor },

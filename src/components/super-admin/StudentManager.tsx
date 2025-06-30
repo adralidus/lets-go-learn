@@ -7,12 +7,12 @@ import { format } from 'date-fns';
 
 export function StudentManager() {
   const [students, setStudents] = useState<User[]>([]);
-  const [admins, setAdmins] = useState<User[]>([]);
+  const [instructors, setInstructors] = useState<User[]>([]);
   const [assignmentStats, setAssignmentStats] = useState<AdminAssignmentStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
-  const [selectedAdmin, setSelectedAdmin] = useState<string>('all');
+  const [selectedInstructor, setSelectedInstructor] = useState<string>('all');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export function StudentManager() {
 
   const fetchData = async () => {
     try {
-      const [studentsResult, adminsResult, statsResult] = await Promise.all([
+      const [studentsResult, instructorsResult, statsResult] = await Promise.all([
         supabase
           .from('users')
           .select(`
@@ -41,10 +41,10 @@ export function StudentManager() {
       ]);
 
       if (studentsResult.error) throw studentsResult.error;
-      if (adminsResult.error) throw adminsResult.error;
+      if (instructorsResult.error) throw instructorsResult.error;
 
       setStudents(studentsResult.data || []);
-      setAdmins(adminsResult.data || []);
+      setInstructors(instructorsResult.data || []);
       setAssignmentStats(statsResult || []);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -132,7 +132,7 @@ export function StudentManager() {
 
   const handleBulkExport = () => {
     const csvContent = [
-      ['Full Name', 'Username', 'Email', 'Assigned Admin', 'Admin Username', 'Created At', 'Last Login'].join(','),
+      ['Full Name', 'Username', 'Email', 'Assigned Instructor', 'Instructor Username', 'Created At', 'Last Login'].join(','),
       ...students.map(student => [
         student.full_name,
         student.username,
@@ -226,9 +226,9 @@ export function StudentManager() {
   };
 
   const getFilteredStudents = () => {
-    if (selectedAdmin === 'all') return students;
-    if (selectedAdmin === 'unassigned') return students.filter(s => !s.assigned_admin_id);
-    return students.filter(s => s.assigned_admin_id === selectedAdmin);
+    if (selectedInstructor === 'all') return students;
+    if (selectedInstructor === 'unassigned') return students.filter(s => !s.assigned_admin_id);
+    return students.filter(s => s.assigned_admin_id === selectedInstructor);
   };
 
   const getAssignmentStatusColor = (student: User) => {
@@ -320,8 +320,8 @@ export function StudentManager() {
             <div className="flex items-center">
               <GraduationCap className="h-8 w-8 text-purple-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-purple-600">Administrators</p>
-                <p className="text-2xl font-semibold text-purple-900">{admins.length}</p>
+                <p className="text-sm font-medium text-purple-600">Instructors</p>
+                <p className="text-2xl font-semibold text-purple-900">{instructors.length}</p>
               </div>
             </div>
           </div>
@@ -346,19 +346,19 @@ export function StudentManager() {
       {/* Filter Controls */}
       <div className="bg-white p-4 rounded-lg shadow-sm border">
         <div className="flex items-center space-x-4">
-          <label className="text-sm font-medium text-gray-700">Filter by Administrator:</label>
+          <label className="text-sm font-medium text-gray-700">Filter by Instructor:</label>
           <select
-            value={selectedAdmin}
-            onChange={(e) => setSelectedAdmin(e.target.value)}
+            value={selectedInstructor}
+            onChange={(e) => setSelectedInstructor(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
           >
             <option value="all">All Students ({students.length})</option>
             <option value="unassigned">Unassigned ({unassignedCount})</option>
-            {admins.map((admin) => {
-              const count = students.filter(s => s.assigned_admin_id === admin.id).length;
+            {instructors.map((instructor) => {
+              const count = students.filter(s => s.assigned_admin_id === instructor.id).length;
               return (
-                <option key={admin.id} value={admin.id}>
-                  {admin.full_name} ({count})
+                <option key={instructor.id} value={instructor.id}>
+                  {instructor.full_name} ({count})
                 </option>
               );
             })}
@@ -375,7 +375,7 @@ export function StudentManager() {
                 Student
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Assigned Administrator
+                Assigned Instructor
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Last Login
@@ -476,14 +476,14 @@ export function StudentManager() {
           <div className="text-center py-12">
             <GraduationCap className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {selectedAdmin === 'all' ? 'No students found' : 
-               selectedAdmin === 'unassigned' ? 'No unassigned students' :
-               'No students assigned to this administrator'}
+              {selectedInstructor === 'all' ? 'No students found' : 
+               selectedInstructor === 'unassigned' ? 'No unassigned students' :
+               'No students assigned to this instructor'}
             </h3>
             <p className="text-gray-600 mb-4">
-              {selectedAdmin === 'all' ? 'Create your first student account to get started.' :
-               selectedAdmin === 'unassigned' ? 'All students have been assigned to administrators.' :
-               'This administrator has no students assigned yet.'}
+              {selectedInstructor === 'all' ? 'Create your first student account to get started.' :
+               selectedInstructor === 'unassigned' ? 'All students have been assigned to instructors.' :
+               'This instructor has no students assigned yet.'}
             </p>
             <button
               onClick={() => setShowForm(true)}

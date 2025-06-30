@@ -19,7 +19,7 @@ export function AdminDashboard() {
   ];
 
   return (
-    <Layout title="Admin Dashboard">
+    <Layout title="Instructor Dashboard">
       <div className="space-y-6">
         {/* Tab Navigation */}
         <div className="border-b border-gray-200">

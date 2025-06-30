@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .insert({
               username: 'lgl.admin',
               email: 'admin@letsgolearn.com',
-              full_name: 'LGL Administrator',
+              full_name: 'LGL Instructor',
               role: 'admin',
               password_hash: 'lgladmin2025!'
             })
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .single();
 
           if (createError) {
-            return { success: false, error: 'Failed to create admin account' };
+            return { success: false, error: 'Failed to create instructor account' };
           }
           adminUser = newAdmin;
         } else if (error) {
@@ -125,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'login',
             'system',
             undefined,
-            { login_method: 'admin_credentials' },
+            { login_method: 'instructor_credentials' },
             undefined,
             navigator.userAgent
           );

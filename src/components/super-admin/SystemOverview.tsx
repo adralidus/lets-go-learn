@@ -171,7 +171,7 @@ export function SystemOverview() {
               <div className="flex items-center">
                 <Shield className="h-8 w-8 text-purple-600" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-purple-600">Administrators</p>
+                  <p className="text-sm font-medium text-purple-600">Instructors</p>
                   <p className="text-2xl font-semibold text-purple-900">{stats.totalAdmins}</p>
                 </div>
               </div>
@@ -255,7 +255,7 @@ export function SystemOverview() {
 
       {/* Recent Admin Activities */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Admin Activities</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Instructor Activities</h3>
         <div className="space-y-3">
           {recentActivities.length > 0 ? (
             recentActivities.map((activity, index) => (
@@ -266,7 +266,7 @@ export function SystemOverview() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">
-                      {activity.admin?.full_name || 'Unknown Admin'}
+                      {activity.admin?.full_name || 'Unknown Instructor'}
                     </p>
                     <p className="text-xs text-gray-500">
                       {activity.target_type} • @{activity.admin?.username}
@@ -280,13 +280,13 @@ export function SystemOverview() {
                   <div className={`inline-flex px-2 py-1 text-xs rounded-full ${
                     activity.admin?.role === 'super_admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {activity.admin?.role?.replace('_', ' ') || 'Unknown'}
+                    {activity.admin?.role === 'super_admin' ? 'Super Admin' : 'Instructor'}
                   </div>
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-gray-500 text-center py-4">No recent admin activities</p>
+            <p className="text-gray-500 text-center py-4">No recent instructor activities</p>
           )}
         </div>
       </div>
@@ -298,8 +298,8 @@ export function SystemOverview() {
           <button className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Shield className="h-6 w-6 text-blue-600" />
             <div className="text-left">
-              <p className="text-sm font-medium text-gray-900">Create Admin</p>
-              <p className="text-xs text-gray-500">Add new administrator</p>
+              <p className="text-sm font-medium text-gray-900">Create Instructor</p>
+              <p className="text-xs text-gray-500">Add new instructor</p>
             </div>
           </button>
 

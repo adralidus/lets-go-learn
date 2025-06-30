@@ -116,7 +116,7 @@ export function LoginForm() {
               </div>
               
               <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                <p className="font-semibold text-blue-800 mb-1">Admin Access</p>
+                <p className="font-semibold text-blue-800 mb-1">Instructor Access</p>
                 <p className="text-blue-700">
                   Username: <code className="bg-blue-100 px-1 rounded">lgl.admin</code><br />
                   Password: <code className="bg-blue-100 px-1 rounded">lgladmin2025!</code>
@@ -126,7 +126,7 @@ export function LoginForm() {
               <div className="bg-green-50 p-3 rounded-md border border-green-200">
                 <p className="font-semibold text-green-800 mb-1">Student Access</p>
                 <p className="text-green-700">
-                  Student accounts can be created by administrators.<br />
+                  Student accounts can be created by instructors.<br />
                   Login with the credentials provided by your instructor.
                 </p>
               </div>

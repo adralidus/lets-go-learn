@@ -72,14 +72,14 @@ export function PermissionForm({ admins, onClose }: PermissionFormProps) {
       if (error) throw error;
 
       // Log the activity
-      const selectedAdmin = admins.find(a => a.id === data.admin_id);
+      const selectedInstructor = admins.find(a => a.id === data.admin_id);
       await logAdminActivity(
         user.id,
         'create',
-        'admin_permission',
+        'instructor_permission',
         newPermission.id,
         {
-          admin_name: selectedAdmin?.full_name,
+          instructor_name: selectedInstructor?.full_name,
           permission_type: data.permission_type,
           resource_type: data.resource_type,
           permissions: {
@@ -95,7 +95,7 @@ export function PermissionForm({ admins, onClose }: PermissionFormProps) {
     } catch (error: any) {
       console.error('Error creating permission:', error);
       if (error.code === '23505') {
-        alert('This permission already exists for the selected administrator.');
+        alert('This permission already exists for the selected instructor.');
       } else {
         alert('Error creating permission. Please try again.');
       }
@@ -108,7 +108,7 @@ export function PermissionForm({ admins, onClose }: PermissionFormProps) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         <div className="flex justify-between items-center p-6 border-b">
-          <h3 className="text-lg font-medium text-gray-900">Grant Admin Permission</h3>
+          <h3 className="text-lg font-medium text-gray-900">Grant Instructor Permission</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -119,15 +119,15 @@ export function PermissionForm({ admins, onClose }: PermissionFormProps) {
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Administrator</label>
+            <label className="block text-sm font-medium text-gray-700">Instructor</label>
             <select
-              {...register('admin_id', { required: 'Administrator is required' })}
+              {...register('admin_id', { required: 'Instructor is required' })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
             >
-              <option value="">Select an administrator</option>
+              <option value="">Select an instructor</option>
               {admins.map((admin) => (
                 <option key={admin.id} value={admin.id}>
-                  {admin.full_name} (@{admin.username}) - {admin.role.replace('_', ' ')}
+                  {admin.full_name} (@{admin.username}) - {admin.role === 'super_admin' ? 'Super Admin' : 'Instructor'}
                 </option>
               ))}
             </select>

@@ -61,10 +61,10 @@ export function AdminForm({ admin, onClose }: AdminFormProps) {
           await logAdminActivity(
             user.id,
             'update',
-            'admin',
+            'instructor',
             admin.id,
             { 
-              admin_name: data.full_name,
+              instructor_name: data.full_name,
               updated_fields: Object.keys(updateData),
               old_role: admin.role,
               new_role: data.role
@@ -92,12 +92,12 @@ export function AdminForm({ admin, onClose }: AdminFormProps) {
           await logAdminActivity(
             user.id,
             'create',
-            'admin',
+            'instructor',
             newAdmin.id,
             { 
-              admin_name: data.full_name,
-              admin_role: data.role,
-              admin_email: data.email
+              instructor_name: data.full_name,
+              instructor_role: data.role,
+              instructor_email: data.email
             }
           );
         }
@@ -105,11 +105,11 @@ export function AdminForm({ admin, onClose }: AdminFormProps) {
 
       onClose();
     } catch (error: any) {
-      console.error('Error saving admin:', error);
+      console.error('Error saving instructor:', error);
       if (error.code === '23505') {
         alert('Username or email already exists. Please choose different values.');
       } else {
-        alert('Error saving administrator. Please try again.');
+        alert('Error saving instructor. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -121,7 +121,7 @@ export function AdminForm({ admin, onClose }: AdminFormProps) {
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         <div className="flex justify-between items-center p-6 border-b">
           <h3 className="text-lg font-medium text-gray-900">
-            {admin ? 'Edit Administrator' : 'Create Administrator'}
+            {admin ? 'Edit Instructor' : 'Create Instructor'}
           </h3>
           <button
             onClick={onClose}
@@ -200,7 +200,7 @@ export function AdminForm({ admin, onClose }: AdminFormProps) {
               {...register('role')}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
             >
-              <option value="admin">Administrator</option>
+              <option value="admin">Instructor</option>
               <option value="super_admin">Super Administrator</option>
             </select>
           </div>
@@ -218,7 +218,7 @@ export function AdminForm({ admin, onClose }: AdminFormProps) {
               disabled={loading}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
             >
-              {loading ? 'Saving...' : admin ? 'Update Administrator' : 'Create Administrator'}
+              {loading ? 'Saving...' : admin ? 'Update Instructor' : 'Create Instructor'}
             </button>
           </div>
         </form>

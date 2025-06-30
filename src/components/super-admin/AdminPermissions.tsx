@@ -6,7 +6,7 @@ import { PermissionForm } from './PermissionForm';
 
 export function AdminPermissions() {
   const [permissions, setPermissions] = useState<AdminPermission[]>([]);
-  const [admins, setAdmins] = useState<User[]>([]);
+  const [instructors, setInstructors] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const { user } = useAuth();
@@ -17,7 +17,7 @@ export function AdminPermissions() {
 
   const fetchData = async () => {
     try {
-      const [permissionsResult, adminsResult] = await Promise.all([
+      const [permissionsResult, instructorsResult] = await Promise.all([
         supabase
           .from('admin_permissions')
           .select(`
@@ -35,10 +35,10 @@ export function AdminPermissions() {
       ]);
 
       if (permissionsResult.error) throw permissionsResult.error;
-      if (adminsResult.error) throw adminsResult.error;
+      if (instructorsResult.error) throw instructorsResult.error;
 
       setPermissions(permissionsResult.data || []);
-      setAdmins(adminsResult.data || []);
+      setInstructors(instructorsResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -62,10 +62,10 @@ export function AdminPermissions() {
         await logAdminActivity(
           user.id,
           'delete',
-          'admin_permission',
+          'instructor_permission',
           permission.id,
           {
-            admin_name: permission.admin?.full_name,
+            instructor_name: permission.admin?.full_name,
             permission_type: permission.permission_type,
             resource_type: permission.resource_type
           }
@@ -119,7 +119,7 @@ export function AdminPermissions() {
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <Key className="h-6 w-6 text-purple-600" />
-          <h3 className="text-lg font-medium text-gray-900">Admin Permissions</h3>
+          <h3 className="text-lg font-medium text-gray-900">Instructor Permissions</h3>
         </div>
         
         <button
@@ -137,7 +137,7 @@ export function AdminPermissions() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Administrator
+                Instructor
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Permission Type
@@ -172,7 +172,7 @@ export function AdminPermissions() {
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-gray-900">
-                        {permission.admin?.full_name || 'Unknown Admin'}
+                        {permission.admin?.full_name || 'Unknown Instructor'}
                       </div>
                       <div className="text-sm text-gray-500">
                         @{permission.admin?.username || 'unknown'}
@@ -214,7 +214,7 @@ export function AdminPermissions() {
           <div className="text-center py-12">
             <Key className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No permissions configured</h3>
-            <p className="text-gray-600 mb-4">Grant specific permissions to administrators to control their access.</p>
+            <p className="text-gray-600 mb-4">Grant specific permissions to instructors to control their access.</p>
             <button
               onClick={() => setShowForm(true)}
               className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
@@ -227,7 +227,7 @@ export function AdminPermissions() {
 
       {showForm && (
         <PermissionForm
-          admins={admins}
+          admins={instructors}
           onClose={handleFormClose}
         />
       )}
