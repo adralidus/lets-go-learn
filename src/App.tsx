@@ -4,6 +4,7 @@ import { LoginForm } from './components/LoginForm';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { SuperAdminDashboard } from './components/super-admin/SuperAdminDashboard';
 import { StudentDashboard } from './components/student/StudentDashboard';
+import { LandingPage } from './components/LandingPage';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -16,17 +17,17 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    return <LoginForm />;
-  }
-
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={!user ? <LoginForm /> : <Navigate to="/dashboard" replace />} />
         <Route 
-          path="/" 
+          path="/dashboard" 
           element={
-            user.role === 'super_admin' ? (
+            !user ? (
+              <Navigate to="/login" replace />
+            ) : user.role === 'super_admin' ? (
               <Navigate to="/super-admin" replace />
             ) : user.role === 'admin' ? (
               <Navigate to="/admin" replace />
@@ -38,30 +39,30 @@ function AppContent() {
         <Route 
           path="/super-admin" 
           element={
-            user.role === 'super_admin' ? (
+            user?.role === 'super_admin' ? (
               <SuperAdminDashboard />
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to="/login" replace />
             )
           } 
         />
         <Route 
           path="/admin" 
           element={
-            user.role === 'admin' || user.role === 'super_admin' ? (
+            user?.role === 'admin' || user?.role === 'super_admin' ? (
               <AdminDashboard />
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to="/login" replace />
             )
           } 
         />
         <Route 
           path="/student" 
           element={
-            user.role === 'student' ? (
+            user?.role === 'student' ? (
               <StudentDashboard />
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to="/login" replace />
             )
           } 
         />
