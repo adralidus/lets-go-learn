@@ -188,6 +188,18 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
     return totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
   };
 
+  const isCorrectAnswer = (question: any, userAnswer: string | string[]) => {
+    if (question.question_type === 'multiple_choice') {
+      return userAnswer === question.correct_answer;
+    } else if (question.question_type === 'multiple_checkboxes') {
+      const userAnswers = Array.isArray(userAnswer) ? userAnswer : (userAnswer ? userAnswer.split(', ') : []);
+      const correctAnswers = question.correct_answers || [];
+      return userAnswers.length === correctAnswers.length && 
+             userAnswers.every((answer: string) => correctAnswers.includes(answer));
+    }
+    return false;
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -279,8 +291,11 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
                 const question = answer.question;
                 if (!question) return null;
 
-                const isCorrect = question.question_type === 'multiple_choice' && 
-                                 answer.answer_text === question.correct_answer;
+                const userAnswer = question.question_type === 'multiple_checkboxes' 
+                  ? (answer.answer_array || [])
+                  : answer.answer_text;
+                
+                const isCorrect = isCorrectAnswer(question, userAnswer);
                 
                 return (
                   <div key={answer.id} className="bg-white p-6 rounded-lg shadow-sm border">
@@ -291,11 +306,16 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                             {question.points} point{question.points !== 1 ? 's' : ''}
                           </span>
-                          {question.question_type === 'multiple_choice' && (
+                          {(question.question_type === 'multiple_choice' || question.question_type === 'multiple_checkboxes') && (
                             <span className={`text-xs px-2 py-1 rounded-full ${
                               isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                             }`}>
                               {isCorrect ? 'Correct' : 'Incorrect'}
+                            </span>
+                          )}
+                          {question.question_type === 'multiple_checkboxes' && (
+                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                              Multiple Answers
                             </span>
                           )}
                         </div>
@@ -351,6 +371,55 @@ export function ExamReviewManager({ onBack }: ExamReviewManagerProps) {
                         ) : (
                           <p className="text-red-600">No options available for this question.</p>
                         )}
+                      </div>
+                    ) : question.question_type === 'multiple_checkboxes' ? (
+                      <div className="space-y-3">
+                        {question.options && question.options.length > 0 ? (
+                          question.options.map((option, optionIndex) => {
+                            const userAnswers = answer.answer_array || [];
+                            const correctAnswers = question.correct_answers || [];
+                            const isUserAnswer = userAnswers.includes(option);
+                            const isCorrectAnswer = correctAnswers.includes(option);
+                            
+                            return (
+                              <div
+                                key={optionIndex}
+                                className={`flex items-center space-x-3 p-3 rounded-md ${
+                                  isCorrectAnswer ? 'bg-green-50 border border-green-200' :
+                                  isUserAnswer && !isCorrectAnswer ? 'bg-red-50 border border-red-200' :
+                                  'bg-gray-50'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  {isCorrectAnswer && <CheckCircle className="h-4 w-4 text-green-600" />}
+                                  {isUserAnswer && !isCorrectAnswer && <XCircle className="h-4 w-4 text-red-600" />}
+                                  {isUserAnswer && (
+                                    <span className="text-xs font-medium text-gray-600">Student selected</span>
+                                  )}
+                                  {isCorrectAnswer && (
+                                    <span className="text-xs font-medium text-green-600">Correct answer</span>
+                                  )}
+                                </div>
+                                <span className="text-gray-900">{option}</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-red-600">No options available for this question.</p>
+                        )}
+                        
+                        <div className="mt-3 p-3 bg-blue-50 rounded-md">
+                          <p className="text-sm text-blue-800">
+                            <strong>Student's selections:</strong> {
+                              userAnswers.length > 0 ? userAnswers.join(', ') : 'None selected'
+                            }
+                          </p>
+                          <p className="text-sm text-blue-700 mt-1">
+                            <strong>Correct answers:</strong> {
+                              (question.correct_answers || []).join(', ') || 'None specified'
+                            }
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-3">

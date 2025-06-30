@@ -49,9 +49,10 @@ export interface ExamQuestion {
   id: string;
   exam_id: string;
   question_text: string;
-  question_type: 'multiple_choice' | 'essay';
+  question_type: 'multiple_choice' | 'multiple_checkboxes' | 'essay';
   options: string[];
   correct_answer?: string;
+  correct_answers?: string[]; // For multiple checkboxes
   points: number;
   is_required: boolean;
   order_index: number;
@@ -75,6 +76,7 @@ export interface ExamAnswer {
   submission_id: string;
   question_id: string;
   answer_text: string;
+  answer_array?: string[]; // For multiple checkboxes
   points_earned: number;
   created_at: string;
 }

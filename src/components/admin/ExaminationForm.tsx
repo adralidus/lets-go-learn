@@ -11,9 +11,10 @@ interface ExaminationFormProps {
 
 interface QuestionFormData {
   question_text: string;
-  question_type: 'multiple_choice' | 'essay';
+  question_type: 'multiple_choice' | 'multiple_checkboxes' | 'essay';
   options: string[];
   correct_answer?: string;
+  correct_answers?: string[]; // For multiple checkboxes
   points: number;
   is_required: boolean;
 }
@@ -86,6 +87,7 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
         question_type: q.question_type,
         options: q.options || [],
         correct_answer: q.correct_answer,
+        correct_answers: q.correct_answers || [],
         points: q.points,
         is_required: q.is_required,
       }));
@@ -102,6 +104,7 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
       question_type: 'multiple_choice',
       options: ['', '', '', ''],
       correct_answer: '',
+      correct_answers: [],
       points: 1,
       is_required: true,
     }]);
@@ -114,6 +117,24 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
   const updateQuestion = (index: number, field: keyof QuestionFormData, value: any) => {
     const updated = [...questions];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Reset answers when question type changes
+    if (field === 'question_type') {
+      if (value === 'multiple_choice') {
+        updated[index].correct_answer = '';
+        updated[index].correct_answers = [];
+        updated[index].options = ['', '', '', ''];
+      } else if (value === 'multiple_checkboxes') {
+        updated[index].correct_answer = '';
+        updated[index].correct_answers = [];
+        updated[index].options = ['', '', '', ''];
+      } else if (value === 'essay') {
+        updated[index].correct_answer = '';
+        updated[index].correct_answers = [];
+        updated[index].options = [];
+      }
+    }
+    
     setQuestions(updated);
   };
 
@@ -132,6 +153,36 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
   const removeOption = (questionIndex: number, optionIndex: number) => {
     const updated = [...questions];
     updated[questionIndex].options = updated[questionIndex].options.filter((_, i) => i !== optionIndex);
+    
+    // Remove from correct answers if it was selected
+    const removedOption = updated[questionIndex].options[optionIndex];
+    if (updated[questionIndex].question_type === 'multiple_checkboxes') {
+      updated[questionIndex].correct_answers = updated[questionIndex].correct_answers?.filter(
+        answer => answer !== removedOption
+      ) || [];
+    } else if (updated[questionIndex].correct_answer === removedOption) {
+      updated[questionIndex].correct_answer = '';
+    }
+    
+    setQuestions(updated);
+  };
+
+  const handleCheckboxChange = (questionIndex: number, option: string, checked: boolean) => {
+    const updated = [...questions];
+    const question = updated[questionIndex];
+    
+    if (!question.correct_answers) {
+      question.correct_answers = [];
+    }
+    
+    if (checked) {
+      if (!question.correct_answers.includes(option)) {
+        question.correct_answers.push(option);
+      }
+    } else {
+      question.correct_answers = question.correct_answers.filter(answer => answer !== option);
+    }
+    
     setQuestions(updated);
   };
 
@@ -188,16 +239,39 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
 
       // Insert questions
       if (questions.length > 0) {
-        const questionsToInsert = questions.map((q, index) => ({
-          exam_id: examId,
-          question_text: q.question_text,
-          question_type: q.question_type,
-          options: q.question_type === 'multiple_choice' ? q.options.filter(opt => opt.trim()) : [],
-          correct_answer: q.question_type === 'multiple_choice' ? q.correct_answer : null,
-          points: q.points,
-          is_required: q.is_required,
-          order_index: index,
-        }));
+        const questionsToInsert = questions.map((q, index) => {
+          const baseQuestion = {
+            exam_id: examId,
+            question_text: q.question_text,
+            question_type: q.question_type,
+            points: q.points,
+            is_required: q.is_required,
+            order_index: index,
+          };
+
+          if (q.question_type === 'multiple_choice') {
+            return {
+              ...baseQuestion,
+              options: q.options.filter(opt => opt.trim()),
+              correct_answer: q.correct_answer,
+              correct_answers: null,
+            };
+          } else if (q.question_type === 'multiple_checkboxes') {
+            return {
+              ...baseQuestion,
+              options: q.options.filter(opt => opt.trim()),
+              correct_answer: null,
+              correct_answers: q.correct_answers || [],
+            };
+          } else {
+            return {
+              ...baseQuestion,
+              options: [],
+              correct_answer: null,
+              correct_answers: null,
+            };
+          }
+        });
 
         const { error: questionsError } = await supabase
           .from('exam_questions')
@@ -362,7 +436,8 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
                       onChange={(e) => updateQuestion(questionIndex, 'question_type', e.target.value)}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="multiple_choice">Multiple Choice</option>
+                      <option value="multiple_choice">Multiple Choice (Single Answer)</option>
+                      <option value="multiple_checkboxes">Multiple Checkboxes (Multiple Answers)</option>
                       <option value="essay">Essay</option>
                     </select>
                   </div>
@@ -389,7 +464,7 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
                   </div>
                 </div>
 
-                {question.question_type === 'multiple_choice' && (
+                {(question.question_type === 'multiple_choice' || question.question_type === 'multiple_checkboxes') && (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <label className="block text-sm font-medium text-gray-700">Options</label>
@@ -404,13 +479,22 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
                     
                     {question.options.map((option, optionIndex) => (
                       <div key={optionIndex} className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          name={`correct_${questionIndex}`}
-                          checked={question.correct_answer === option}
-                          onChange={() => updateQuestion(questionIndex, 'correct_answer', option)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
+                        {question.question_type === 'multiple_choice' ? (
+                          <input
+                            type="radio"
+                            name={`correct_${questionIndex}`}
+                            checked={question.correct_answer === option}
+                            onChange={() => updateQuestion(questionIndex, 'correct_answer', option)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={question.correct_answers?.includes(option) || false}
+                            onChange={(e) => handleCheckboxChange(questionIndex, option, e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                        )}
                         <input
                           type="text"
                           value={option}
@@ -430,7 +514,12 @@ export function ExaminationForm({ examination, onClose }: ExaminationFormProps) 
                       </div>
                     ))}
                     
-                    <p className="text-xs text-gray-500">Select the radio button next to the correct answer</p>
+                    <p className="text-xs text-gray-500">
+                      {question.question_type === 'multiple_choice' 
+                        ? 'Select the radio button next to the correct answer'
+                        : 'Check all correct answers (students can select multiple options)'
+                      }
+                    </p>
                   </div>
                 )}
               </div>

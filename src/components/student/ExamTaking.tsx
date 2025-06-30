@@ -10,7 +10,7 @@ interface ExamTakingProps {
 
 export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submission, setSubmission] = useState<ExamSubmission | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -98,10 +98,15 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
       if (answersError) throw answersError;
 
       // Convert answers to state format
-      const answersMap: Record<string, string> = {};
+      const answersMap: Record<string, string | string[]> = {};
       if (answersData) {
         answersData.forEach(answer => {
-          answersMap[answer.question_id] = answer.answer_text || '';
+          const question = questionsData.find(q => q.id === answer.question_id);
+          if (question?.question_type === 'multiple_checkboxes') {
+            answersMap[answer.question_id] = answer.answer_array || [];
+          } else {
+            answersMap[answer.question_id] = answer.answer_text || '';
+          }
         });
       }
 
@@ -124,14 +129,18 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
     }
   };
 
-  const saveAnswerToDatabase = useCallback(async (questionId: string, answer: string, submissionId: string) => {
+  const saveAnswerToDatabase = useCallback(async (questionId: string, answer: string | string[], submissionId: string) => {
     try {
+      const answerData = Array.isArray(answer) 
+        ? { answer_array: answer, answer_text: answer.join(', ') }
+        : { answer_text: answer, answer_array: null };
+
       const { error } = await supabase
         .from('exam_answers')
         .upsert({
           submission_id: submissionId,
           question_id: questionId,
-          answer_text: answer,
+          ...answerData,
         }, {
           onConflict: 'submission_id,question_id'
         });
@@ -142,12 +151,11 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
       }
     } catch (error) {
       console.error('Error saving answer:', error);
-      // Could add toast notification here
       throw error;
     }
   }, []);
 
-  const handleAnswerChange = useCallback((questionId: string, answer: string) => {
+  const handleAnswerChange = useCallback((questionId: string, answer: string | string[]) => {
     // Update local state immediately for responsive UI
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
 
@@ -179,13 +187,36 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
     }
   }, [submission?.id, saveTimeouts, saveAnswerToDatabase]);
 
+  const handleCheckboxChange = (questionId: string, option: string, checked: boolean) => {
+    const currentAnswers = (answers[questionId] as string[]) || [];
+    let newAnswers: string[];
+    
+    if (checked) {
+      newAnswers = [...currentAnswers, option];
+    } else {
+      newAnswers = currentAnswers.filter(answer => answer !== option);
+    }
+    
+    handleAnswerChange(questionId, newAnswers);
+  };
+
   const calculateScore = useCallback(() => {
     let totalScore = 0;
     
     questions.forEach(question => {
       const userAnswer = answers[question.id];
+      
       if (question.question_type === 'multiple_choice' && userAnswer === question.correct_answer) {
         totalScore += question.points;
+      } else if (question.question_type === 'multiple_checkboxes') {
+        const userAnswers = Array.isArray(userAnswer) ? userAnswer : [];
+        const correctAnswers = question.correct_answers || [];
+        
+        // Check if user selected exactly the correct answers
+        if (userAnswers.length === correctAnswers.length && 
+            userAnswers.every(answer => correctAnswers.includes(answer))) {
+          totalScore += question.points;
+        }
       }
       // Essay questions would need manual grading
     });
@@ -223,20 +254,30 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
 
       if (submissionError) throw submissionError;
 
-      // Update answer scores for multiple choice questions
+      // Update answer scores for auto-gradable questions
       const scoreUpdatePromises = questions.map(async (question) => {
+        const userAnswer = answers[question.id];
+        let pointsEarned = 0;
+        
         if (question.question_type === 'multiple_choice') {
-          const userAnswer = answers[question.id];
-          const pointsEarned = userAnswer === question.correct_answer ? question.points : 0;
+          pointsEarned = userAnswer === question.correct_answer ? question.points : 0;
+        } else if (question.question_type === 'multiple_checkboxes') {
+          const userAnswers = Array.isArray(userAnswer) ? userAnswer : [];
+          const correctAnswers = question.correct_answers || [];
           
-          const { error } = await supabase
-            .from('exam_answers')
-            .update({ points_earned: pointsEarned })
-            .eq('submission_id', submission.id)
-            .eq('question_id', question.id);
-
-          if (error) throw error;
+          if (userAnswers.length === correctAnswers.length && 
+              userAnswers.every(answer => correctAnswers.includes(answer))) {
+            pointsEarned = question.points;
+          }
         }
+        
+        const { error } = await supabase
+          .from('exam_answers')
+          .update({ points_earned: pointsEarned })
+          .eq('submission_id', submission.id)
+          .eq('question_id', question.id);
+
+        if (error) throw error;
       });
 
       await Promise.all(scoreUpdatePromises);
@@ -262,7 +303,23 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
   };
 
   const getRequiredUnanswered = () => {
-    return questions.filter(q => q.is_required && !answers[q.id]?.trim()).length;
+    return questions.filter(q => {
+      if (!q.is_required) return false;
+      
+      const answer = answers[q.id];
+      if (q.question_type === 'multiple_checkboxes') {
+        return !Array.isArray(answer) || answer.length === 0;
+      }
+      return !answer || (typeof answer === 'string' && !answer.trim());
+    }).length;
+  };
+
+  const isAnswered = (questionId: string, questionType: string) => {
+    const answer = answers[questionId];
+    if (questionType === 'multiple_checkboxes') {
+      return Array.isArray(answer) && answer.length > 0;
+    }
+    return answer && (typeof answer === 'string' && answer.trim());
   };
 
   if (loading) {
@@ -349,6 +406,11 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                       {question.points} point{question.points !== 1 ? 's' : ''}
                     </span>
+                    {question.question_type === 'multiple_checkboxes' && (
+                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                        Multiple Answers
+                      </span>
+                    )}
                     {savingAnswers[question.id] && (
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full flex items-center space-x-1">
                         <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-600"></div>
@@ -359,7 +421,7 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">{question.question_text}</h3>
                 </div>
                 
-                {answers[question.id]?.trim() && (
+                {isAnswered(question.id, question.question_type) && (
                   <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-1" />
                 )}
               </div>
@@ -384,17 +446,38 @@ export function ExamTaking({ examination, onComplete }: ExamTakingProps) {
                     <p className="text-red-600">No options available for this question.</p>
                   )}
                 </div>
+              ) : question.question_type === 'multiple_checkboxes' ? (
+                <div className="space-y-3">
+                  {question.options && question.options.length > 0 ? (
+                    <>
+                      <p className="text-sm text-gray-600 mb-3">Select all correct answers:</p>
+                      {question.options.map((option, optionIndex) => (
+                        <label key={optionIndex} className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Array.isArray(answers[question.id]) && (answers[question.id] as string[]).includes(option)}
+                            onChange={(e) => handleCheckboxChange(question.id, option, e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-gray-900">{option}</span>
+                        </label>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-red-600">No options available for this question.</p>
+                  )}
+                </div>
               ) : (
                 <div className="relative">
                   <textarea
-                    value={answers[question.id] || ''}
+                    value={(answers[question.id] as string) || ''}
                     onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                     rows={6}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 resize-vertical"
                     placeholder="Type your answer here..."
                   />
                   <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-                    {(answers[question.id] || '').length} characters
+                    {((answers[question.id] as string) || '').length} characters
                   </div>
                 </div>
               )}
