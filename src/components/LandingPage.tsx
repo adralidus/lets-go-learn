@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, GraduationCap, FileText, Award, Send, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const contactFormRef = useRef<HTMLElement>(null);
   const [formData, setFormData] = useState({
     email: '',
     subject: '',
@@ -44,6 +45,10 @@ export function LandingPage() {
     }
   };
 
+  const scrollToContactForm = () => {
+    contactFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -78,7 +83,7 @@ export function LandingPage() {
               A comprehensive learning management system designed for educational institutions, instructors, and students.
             </p>
             <button
-              onClick={() => navigate('/login')}
+              onClick={scrollToContactForm}
               className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors text-lg font-medium"
             >
               Get Started
@@ -186,7 +191,7 @@ export function LandingPage() {
       </section>
 
       {/* Contact Form Section */}
-      <section className="py-16 bg-blue-50">
+      <section ref={contactFormRef} className="py-16 bg-blue-50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-center text-gray-900 mb-8">Contact Us for Inquiry</h2>
           
