@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, GraduationCap, FileText, Award, Send, ArrowRight } from 'lucide-react';
-import { supabase, createSystemNotification } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -25,30 +25,14 @@ export function LandingPage() {
     setError('');
     
     try {
-      // Get super admin ID to send notification to
-      const { data: superAdmins, error: adminError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('role', 'super_admin')
-        .limit(1);
+      // Call the create_inquiry function
+      const { data, error: inquiryError } = await supabase.rpc('create_inquiry', {
+        p_email: formData.email,
+        p_subject: formData.subject,
+        p_message: formData.message
+      });
       
-      if (adminError) throw adminError;
-      
-      if (!superAdmins || superAdmins.length === 0) {
-        throw new Error('No super admin found to receive the inquiry');
-      }
-      
-      const superAdminId = superAdmins[0].id;
-      
-      // Create system notification
-      await createSystemNotification(
-        `New Inquiry: ${formData.subject}`,
-        `Email: ${formData.email}\n\nMessage: ${formData.message}`,
-        'info',
-        undefined,
-        superAdminId,
-        false
-      );
+      if (inquiryError) throw inquiryError;
       
       setSuccess(true);
       setFormData({ email: '', subject: '', message: '' });

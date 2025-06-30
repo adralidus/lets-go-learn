@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, SystemNotification, logAdminActivity } from '../../lib/supabase';
+import { supabase, logAdminActivity } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Mail, 
@@ -15,18 +15,33 @@ import {
   ExternalLink, 
   Clock, 
   ArrowUp, 
-  ArrowDown
+  ArrowDown,
+  MessageSquare,
+  Archive
 } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format, subDays, parseISO } from 'date-fns';
 
 type SortField = 'created_at' | 'email' | 'subject';
 type SortDirection = 'asc' | 'desc';
 type DateFilter = 'all' | 'today' | 'week' | 'month';
+type StatusFilter = 'all' | 'new' | 'read' | 'responded' | 'archived';
 
-interface Inquiry extends SystemNotification {
+interface Inquiry {
+  id: string;
   email: string;
   subject: string;
-  inquiryMessage: string;
+  message: string;
+  status: 'new' | 'read' | 'responded' | 'archived';
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+  responded_at?: string;
+  responded_by?: string;
+  response_message?: string;
+  responder?: {
+    full_name: string;
+    username: string;
+  };
 }
 
 export function InquiryManager() {
@@ -37,10 +52,12 @@ export function InquiryManager() {
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedInquiries, setSelectedInquiries] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [responseText, setResponseText] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -49,38 +66,22 @@ export function InquiryManager() {
 
   useEffect(() => {
     applyFilters();
-  }, [inquiries, searchQuery, dateFilter, sortField, sortDirection]);
+  }, [inquiries, searchQuery, dateFilter, statusFilter, sortField, sortDirection]);
 
   const fetchInquiries = async () => {
     try {
       setRefreshing(true);
       const { data, error } = await supabase
-        .from('system_notifications')
+        .from('inquiries')
         .select(`
           *,
-          created_by_user:users!system_notifications_created_by_fkey(full_name, username)
+          responder:responded_by(full_name, username)
         `)
-        .like('title', 'New Inquiry:%')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Parse inquiry details from the notification
-      const parsedInquiries = (data || []).map(notification => {
-        const subject = notification.title.replace('New Inquiry: ', '');
-        const messageLines = notification.message.split('\n\n');
-        const email = messageLines[0].replace('Email: ', '');
-        const inquiryMessage = messageLines[1]?.replace('Message: ', '') || '';
-        
-        return {
-          ...notification,
-          email,
-          subject,
-          inquiryMessage
-        };
-      });
-      
-      setInquiries(parsedInquiries);
+      setInquiries(data || []);
       setRefreshing(false);
     } catch (error) {
       console.error('Error fetching inquiries:', error);
@@ -99,22 +100,27 @@ export function InquiryManager() {
       result = result.filter(inquiry => 
         inquiry.email.toLowerCase().includes(query) || 
         inquiry.subject.toLowerCase().includes(query) || 
-        inquiry.inquiryMessage.toLowerCase().includes(query)
+        inquiry.message.toLowerCase().includes(query)
       );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(inquiry => inquiry.status === statusFilter);
     }
     
     // Apply date filter
     if (dateFilter === 'today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      result = result.filter(inquiry => new Date(inquiry.created_at) >= today);
+      result = result.filter(inquiry => parseISO(inquiry.created_at) >= today);
     } else if (dateFilter === 'week') {
       result = result.filter(inquiry => 
-        new Date(inquiry.created_at) >= subDays(new Date(), 7)
+        parseISO(inquiry.created_at) >= subDays(new Date(), 7)
       );
     } else if (dateFilter === 'month') {
       result = result.filter(inquiry => 
-        new Date(inquiry.created_at) >= subDays(new Date(), 30)
+        parseISO(inquiry.created_at) >= subDays(new Date(), 30)
       );
     }
     
@@ -122,8 +128,8 @@ export function InquiryManager() {
     result.sort((a, b) => {
       if (sortField === 'created_at') {
         return sortDirection === 'desc' 
-          ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          ? parseISO(b.created_at).getTime() - parseISO(a.created_at).getTime()
+          : parseISO(a.created_at).getTime() - parseISO(b.created_at).getTime();
       } else if (sortField === 'email') {
         return sortDirection === 'desc'
           ? b.email.localeCompare(a.email)
@@ -144,7 +150,7 @@ export function InquiryManager() {
 
     try {
       const { error } = await supabase
-        .from('system_notifications')
+        .from('inquiries')
         .delete()
         .eq('id', inquiry.id);
 
@@ -187,7 +193,7 @@ export function InquiryManager() {
 
     try {
       const { error } = await supabase
-        .from('system_notifications')
+        .from('inquiries')
         .delete()
         .in('id', selectedInquiries);
 
@@ -220,20 +226,21 @@ export function InquiryManager() {
 
   const handleMarkAsRead = async (inquiry: Inquiry) => {
     try {
-      const { error } = await supabase
-        .from('system_notifications')
-        .update({ is_read: true })
-        .eq('id', inquiry.id);
+      const { error } = await supabase.rpc('update_inquiry_status', {
+        p_inquiry_id: inquiry.id,
+        p_status: 'read',
+        p_is_read: true
+      });
 
       if (error) throw error;
 
       // Update local state
       setInquiries(prev => prev.map(i => 
-        i.id === inquiry.id ? { ...i, is_read: true } : i
+        i.id === inquiry.id ? { ...i, status: 'read', is_read: true } : i
       ));
       
       if (selectedInquiry?.id === inquiry.id) {
-        setSelectedInquiry({ ...selectedInquiry, is_read: true });
+        setSelectedInquiry({ ...selectedInquiry, status: 'read', is_read: true });
       }
     } catch (error) {
       console.error('Error marking inquiry as read:', error);
@@ -244,20 +251,24 @@ export function InquiryManager() {
     if (selectedInquiries.length === 0) return;
     
     try {
-      const { error } = await supabase
-        .from('system_notifications')
-        .update({ is_read: true })
-        .in('id', selectedInquiries);
-
-      if (error) throw error;
+      // We need to update each inquiry individually
+      const updatePromises = selectedInquiries.map(id => 
+        supabase.rpc('update_inquiry_status', {
+          p_inquiry_id: id,
+          p_status: 'read',
+          p_is_read: true
+        })
+      );
+      
+      await Promise.all(updatePromises);
 
       // Update local state
       setInquiries(prev => prev.map(i => 
-        selectedInquiries.includes(i.id) ? { ...i, is_read: true } : i
+        selectedInquiries.includes(i.id) ? { ...i, status: 'read', is_read: true } : i
       ));
       
       if (selectedInquiry && selectedInquiries.includes(selectedInquiry.id)) {
-        setSelectedInquiry({ ...selectedInquiry, is_read: true });
+        setSelectedInquiry({ ...selectedInquiry, status: 'read', is_read: true });
       }
     } catch (error) {
       console.error('Error marking inquiries as read:', error);
@@ -265,11 +276,120 @@ export function InquiryManager() {
     }
   };
 
+  const handleArchive = async (inquiry: Inquiry) => {
+    try {
+      const { error } = await supabase.rpc('update_inquiry_status', {
+        p_inquiry_id: inquiry.id,
+        p_status: 'archived',
+        p_is_read: true
+      });
+
+      if (error) throw error;
+
+      // Update local state
+      setInquiries(prev => prev.map(i => 
+        i.id === inquiry.id ? { ...i, status: 'archived', is_read: true } : i
+      ));
+      
+      if (selectedInquiry?.id === inquiry.id) {
+        setSelectedInquiry({ ...selectedInquiry, status: 'archived', is_read: true });
+      }
+    } catch (error) {
+      console.error('Error archiving inquiry:', error);
+      alert('Error archiving inquiry. Please try again.');
+    }
+  };
+
+  const handleBatchArchive = async () => {
+    if (selectedInquiries.length === 0) return;
+    
+    try {
+      // We need to update each inquiry individually
+      const updatePromises = selectedInquiries.map(id => 
+        supabase.rpc('update_inquiry_status', {
+          p_inquiry_id: id,
+          p_status: 'archived',
+          p_is_read: true
+        })
+      );
+      
+      await Promise.all(updatePromises);
+
+      // Update local state
+      setInquiries(prev => prev.map(i => 
+        selectedInquiries.includes(i.id) ? { ...i, status: 'archived', is_read: true } : i
+      ));
+      
+      if (selectedInquiry && selectedInquiries.includes(selectedInquiry.id)) {
+        setSelectedInquiry({ ...selectedInquiry, status: 'archived', is_read: true });
+      }
+    } catch (error) {
+      console.error('Error archiving inquiries:', error);
+      alert('Error archiving inquiries. Please try again.');
+    }
+  };
+
+  const handleSendResponse = async () => {
+    if (!selectedInquiry || !responseText.trim() || !user) return;
+    
+    try {
+      const { error } = await supabase.rpc('update_inquiry_status', {
+        p_inquiry_id: selectedInquiry.id,
+        p_status: 'responded',
+        p_is_read: true,
+        p_response_message: responseText,
+        p_responded_by: user.id
+      });
+
+      if (error) throw error;
+
+      // Log the activity
+      await logAdminActivity(
+        user.id,
+        'respond',
+        'inquiry',
+        selectedInquiry.id,
+        {
+          inquiry_email: selectedInquiry.email,
+          inquiry_subject: selectedInquiry.subject
+        }
+      );
+
+      // Update local state
+      const updatedInquiry = {
+        ...selectedInquiry,
+        status: 'responded',
+        is_read: true,
+        response_message: responseText,
+        responded_at: new Date().toISOString(),
+        responded_by: user.id,
+        responder: {
+          full_name: user.full_name,
+          username: user.username
+        }
+      };
+      
+      setInquiries(prev => prev.map(i => 
+        i.id === selectedInquiry.id ? updatedInquiry : i
+      ));
+      
+      setSelectedInquiry(updatedInquiry);
+      setResponseText('');
+      
+      // Open email client with pre-filled response
+      window.open(`mailto:${selectedInquiry.email}?subject=Re: ${selectedInquiry.subject}&body=${encodeURIComponent(responseText)}`, '_blank');
+      
+    } catch (error) {
+      console.error('Error sending response:', error);
+      alert('Error sending response. Please try again.');
+    }
+  };
+
   const handleSelectInquiry = (inquiry: Inquiry) => {
     setSelectedInquiry(inquiry);
     
-    // If inquiry is unread, mark it as read
-    if (!inquiry.is_read) {
+    // If inquiry is new, mark it as read
+    if (inquiry.status === 'new' && !inquiry.is_read) {
       handleMarkAsRead(inquiry);
     }
   };
@@ -297,13 +417,16 @@ export function InquiryManager() {
       : inquiries;
     
     const csvContent = [
-      ['Date', 'Email', 'Subject', 'Message', 'Status'].join(','),
+      ['Date', 'Email', 'Subject', 'Message', 'Status', 'Response', 'Responded By', 'Responded At'].join(','),
       ...dataToExport.map(inquiry => [
-        format(new Date(inquiry.created_at), 'yyyy-MM-dd HH:mm:ss'),
+        format(parseISO(inquiry.created_at), 'yyyy-MM-dd HH:mm:ss'),
         inquiry.email,
         `"${inquiry.subject.replace(/"/g, '""')}"`,
-        `"${inquiry.inquiryMessage.replace(/"/g, '""')}"`,
-        inquiry.is_read ? 'Read' : 'Unread'
+        `"${inquiry.message.replace(/"/g, '""')}"`,
+        inquiry.status,
+        inquiry.response_message ? `"${inquiry.response_message.replace(/"/g, '""')}"` : '',
+        inquiry.responder?.full_name || '',
+        inquiry.responded_at ? format(parseISO(inquiry.responded_at), 'yyyy-MM-dd HH:mm:ss') : ''
       ].join(','))
     ].join('\n');
     
@@ -341,6 +464,26 @@ export function InquiryManager() {
     window.open(`mailto:${email}`, '_blank');
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'new': return 'bg-blue-100 text-blue-800';
+      case 'read': return 'bg-yellow-100 text-yellow-800';
+      case 'responded': return 'bg-green-100 text-green-800';
+      case 'archived': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'new': return <Mail className="h-4 w-4 text-blue-600" />;
+      case 'read': return <CheckCircle className="h-4 w-4 text-yellow-600" />;
+      case 'responded': return <MessageSquare className="h-4 w-4 text-green-600" />;
+      case 'archived': return <Archive className="h-4 w-4 text-gray-600" />;
+      default: return <Mail className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -360,7 +503,7 @@ export function InquiryManager() {
               Total: {inquiries.length}
             </span>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800`}>
-              Unread: {inquiries.filter(i => !i.is_read).length}
+              New: {inquiries.filter(i => i.status === 'new').length}
             </span>
           </div>
         </div>
@@ -392,6 +535,21 @@ export function InquiryManager() {
           </div>
           
           <div className="flex flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-gray-500" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+              >
+                <option value="all">All Status</option>
+                <option value="new">New</option>
+                <option value="read">Read</option>
+                <option value="responded">Responded</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            
             <div className="flex items-center space-x-2">
               <Clock className="h-4 w-4 text-gray-500" />
               <select
@@ -448,6 +606,13 @@ export function InquiryManager() {
               <span>Mark as Read</span>
             </button>
             <button
+              onClick={handleBatchArchive}
+              className="flex items-center space-x-1 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors"
+            >
+              <Archive className="h-4 w-4" />
+              <span>Archive</span>
+            </button>
+            <button
               onClick={handleExport}
               className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
@@ -500,7 +665,7 @@ export function InquiryManager() {
                       key={inquiry.id} 
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
                         isActive ? 'bg-purple-50 border-l-4 border-purple-500' : ''
-                      } ${!inquiry.is_read ? 'bg-blue-50' : ''}`}
+                      } ${inquiry.status === 'new' ? 'bg-blue-50' : ''}`}
                     >
                       <div className="flex items-start space-x-3">
                         <div className="flex items-center h-5">
@@ -519,8 +684,8 @@ export function InquiryManager() {
                         >
                           <div className="flex items-center justify-between mb-1">
                             <h5 className="text-sm font-medium text-gray-900 truncate">{inquiry.subject}</h5>
-                            <span className="text-xs text-gray-500">
-                              {format(new Date(inquiry.created_at), 'MMM dd, HH:mm')}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(inquiry.status)}`}>
+                              {inquiry.status}
                             </span>
                           </div>
                           
@@ -530,8 +695,18 @@ export function InquiryManager() {
                           </div>
                           
                           <p className="text-sm text-gray-600 line-clamp-2">
-                            {inquiry.inquiryMessage}
+                            {inquiry.message}
                           </p>
+                          
+                          <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                            <span>{format(parseISO(inquiry.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                            {inquiry.status === 'responded' && (
+                              <span className="flex items-center">
+                                <MessageSquare className="h-3 w-3 mr-1 text-green-500" />
+                                <span>Responded</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -564,7 +739,7 @@ export function InquiryManager() {
             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
               <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
                 <h4 className="font-medium text-gray-900 flex items-center space-x-2">
-                  <Mail className="h-4 w-4 text-purple-600" />
+                  {getStatusIcon(selectedInquiry.status)}
                   <span>Inquiry Details</span>
                 </h4>
                 <div className="flex items-center space-x-2">
@@ -584,10 +759,8 @@ export function InquiryManager() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-gray-900">{selectedInquiry.subject}</h3>
                     <div className="flex items-center space-x-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        selectedInquiry.is_read ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {selectedInquiry.is_read ? 'Read' : 'Unread'}
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedInquiry.status)}`}>
+                        {selectedInquiry.status}
                       </span>
                     </div>
                   </div>
@@ -598,7 +771,7 @@ export function InquiryManager() {
                       <p className="text-sm font-medium text-blue-800">{selectedInquiry.email}</p>
                     </div>
                     <p className="text-xs text-blue-600 mt-1">
-                      Received on {format(new Date(selectedInquiry.created_at), 'MMMM dd, yyyy HH:mm:ss')}
+                      Received on {format(parseISO(selectedInquiry.created_at), 'MMMM dd, yyyy HH:mm:ss')}
                     </p>
                   </div>
                 </div>
@@ -608,13 +781,59 @@ export function InquiryManager() {
                   <div>
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Message</h4>
                     <div className="bg-gray-50 p-4 rounded-md border whitespace-pre-wrap">
-                      {selectedInquiry.inquiryMessage}
+                      {selectedInquiry.message}
                     </div>
                   </div>
                   
-                  {/* Response Actions */}
+                  {/* Response Section */}
+                  {selectedInquiry.status === 'responded' ? (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Response</h4>
+                      <div className="bg-green-50 p-4 rounded-md border border-green-200">
+                        <div className="mb-2 pb-2 border-b border-green-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <MessageSquare className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium text-green-800">
+                                Responded by {selectedInquiry.responder?.full_name || 'Unknown'}
+                              </span>
+                            </div>
+                            <span className="text-xs text-green-600">
+                              {selectedInquiry.responded_at && format(parseISO(selectedInquiry.responded_at), 'MMM dd, yyyy HH:mm')}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-green-800 whitespace-pre-wrap">
+                          {selectedInquiry.response_message}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Compose Response</h4>
+                      <textarea
+                        value={responseText}
+                        onChange={(e) => setResponseText(e.target.value)}
+                        rows={5}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Type your response here..."
+                      ></textarea>
+                      <div className="flex justify-end mt-2">
+                        <button
+                          onClick={handleSendResponse}
+                          disabled={!responseText.trim()}
+                          className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          <Send className="h-4 w-4" />
+                          <span>Send Response</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Quick Actions */}
                   <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                    <h4 className="text-sm font-medium text-blue-800 mb-3">Response Actions</h4>
+                    <h4 className="text-sm font-medium text-blue-800 mb-3">Quick Actions</h4>
                     <div className="flex flex-wrap gap-3">
                       <button 
                         onClick={() => handleComposeEmail(selectedInquiry.email)}
@@ -644,14 +863,24 @@ export function InquiryManager() {
                 
                 {/* Actions */}
                 <div className="flex justify-between pt-4 border-t">
-                  <div>
-                    {!selectedInquiry.is_read && (
+                  <div className="flex space-x-3">
+                    {selectedInquiry.status === 'new' && (
                       <button
                         onClick={() => handleMarkAsRead(selectedInquiry)}
                         className="flex items-center space-x-2 text-blue-600 hover:text-blue-800"
                       >
                         <CheckCircle className="h-4 w-4" />
                         <span>Mark as Read</span>
+                      </button>
+                    )}
+                    
+                    {selectedInquiry.status !== 'archived' && (
+                      <button
+                        onClick={() => handleArchive(selectedInquiry)}
+                        className="flex items-center space-x-2 text-yellow-600 hover:text-yellow-800"
+                      >
+                        <Archive className="h-4 w-4" />
+                        <span>Archive</span>
                       </button>
                     )}
                   </div>

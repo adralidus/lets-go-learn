@@ -160,6 +160,26 @@ export interface SystemNotification {
   created_at: string;
   expires_at?: string;
   created_by_user?: User;
+  target_user?: User;
+}
+
+// Inquiry type
+export interface Inquiry {
+  id: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'read' | 'responded' | 'archived';
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+  responded_at?: string;
+  responded_by?: string;
+  response_message?: string;
+  responder?: {
+    full_name: string;
+    username: string;
+  };
 }
 
 // Student-Admin assignment types
@@ -278,6 +298,41 @@ export const getAssignedStudents = async (adminId: string) => {
 
 export const getAdminAssignmentStats = async () => {
   const { data, error } = await supabase.rpc('get_admin_assignment_stats');
+
+  if (error) throw error;
+  return data;
+};
+
+// Inquiry functions
+export const createInquiry = async (
+  email: string,
+  subject: string,
+  message: string
+) => {
+  const { data, error } = await supabase.rpc('create_inquiry', {
+    p_email: email,
+    p_subject: subject,
+    p_message: message
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+export const updateInquiryStatus = async (
+  inquiryId: string,
+  status: 'new' | 'read' | 'responded' | 'archived',
+  isRead: boolean = true,
+  responseMessage?: string,
+  respondedBy?: string
+) => {
+  const { data, error } = await supabase.rpc('update_inquiry_status', {
+    p_inquiry_id: inquiryId,
+    p_status: status,
+    p_is_read: isRead,
+    p_response_message: responseMessage,
+    p_responded_by: respondedBy
+  });
 
   if (error) throw error;
   return data;
