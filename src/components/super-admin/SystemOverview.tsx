@@ -10,7 +10,9 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle,
-  Clock
+  Clock,
+  Settings,
+  Bell
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 
