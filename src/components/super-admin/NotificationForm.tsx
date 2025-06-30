@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createSystemNotification, logAdminActivity } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { X, Send, AlertTriangle, Info, CheckCircle, Bell } from 'lucide-react';
+import { X, Send, AlertTriangle, Info, CheckCircle, Bell, Users, Settings } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
 interface NotificationFormProps {
