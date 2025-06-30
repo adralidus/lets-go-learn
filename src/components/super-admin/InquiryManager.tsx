@@ -60,9 +60,7 @@ export function InquiryManager() {
 
   const fetchInquiries = async () => {
     try {
-      console.log("Fetching inquiries...");
       setRefreshing(true);
-      
       const { data, error } = await supabase
         .from('inquiries')
         .select(`
@@ -71,13 +69,7 @@ export function InquiryManager() {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching inquiries:', error);
-        throw error;
-      }
-      
-      console.log("Inquiries fetched:", data?.length || 0, "records");
-      console.log("Inquiry data sample:", data?.[0] || "No records");
+      if (error) throw error;
       
       setInquiries(data || []);
       setRefreshing(false);
